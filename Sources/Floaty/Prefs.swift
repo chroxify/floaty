@@ -141,10 +141,11 @@ enum Prefs {
 
     /// Put the caret in the page's main text field whenever Floaty comes to the
     /// foreground.
-    /// Off by default — it's right for a chat or search page and wrong for a
-    /// page you're only reading, where it would hijack space-to-scroll.
+    /// On by default: the pages people float are overwhelmingly chats and search
+    /// boxes, where you want to type the moment it appears. On a page you're
+    /// only reading it hijacks space-to-scroll, so it can be switched off.
     static var autoFocusInput: Bool {
-        get { d.object(forKey: Key.autoFocusInput) as? Bool ?? false }
+        get { d.object(forKey: Key.autoFocusInput) as? Bool ?? true }
         set { d.set(newValue, forKey: Key.autoFocusInput) }
     }
 

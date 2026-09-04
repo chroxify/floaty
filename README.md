@@ -198,7 +198,7 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
 
   If the target has no window right now — minimised, or between windows — Floaty
   stays where it is rather than flinging itself somewhere.
-- **Focus Inputs on Foreground** (off by default) puts the caret in the page's
+- **Focus Inputs on Foreground** (on by default) puts the caret in the page's
   main text field whenever Floaty comes to the front, however it got there —
   shortcut, menu, dock, or a click. Right for a chat or search page, wrong for one
   you're only reading, where it would hijack space-to-scroll.
