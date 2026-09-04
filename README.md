@@ -154,6 +154,22 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   Whitelisted apps stay listed even after they quit, so closing an app doesn't
   silently drop it from the set.
 
+  When it comes back, it's **positioned before it's shown**. A hidden window
+  keeps the frame it had, so showing it and correcting on the next tick meant a
+  visible jump from beside the old parent to beside the new one. Setting the
+  frame while still hidden is free, and it appears already in place.
+
+  That alone fixed most of it, not all. The activation notification arrives
+  *before* the window server has brought the app's windows forward, so a poll
+  taken right then still sees the previous app's window in front — and, for an
+  app with several windows, the wrong one of its own as frontmost. Floaty would
+  appear beside that, then hop. Comparing two polls doesn't help either:
+  activation fires two observers that each tick synchronously, so the "two"
+  reads are the same instant. The show instead waits for the window list to
+  say the target's window is the frontmost normal window, which is what
+  activation is about to make true — normally a frame or two — capped at
+  250ms so an app with nothing to bring forward can't keep Floaty hidden.
+
   Tracking polls `CGWindowListCopyWindowInfo`, which reads other apps' window
   frames with **no Accessibility permission** — the same reason the hotkey uses
   Carbon. An `AXObserver` would deliver moves as events instead of samples, but it

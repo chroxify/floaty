@@ -82,6 +82,11 @@ final class WindowDock {
     private var stillTicks = 0
     private var currentSide: DockSide = .right
     private var lastParentFrame: CGRect?
+    /// When we started waiting to reappear, so the wait can be capped.
+    private var showWaitStart: TimeInterval?
+    /// Longest we'll hold the window back waiting for the target's window to
+    /// come forward. Normally it takes a frame or two.
+    private let showWaitLimit: TimeInterval = 0.25
 
     /// True while we're the ones moving the window, so our own moves don't get
     /// mistaken for the user repositioning it — and so the window's saved frame
@@ -217,6 +222,38 @@ final class WindowDock {
 
         let visible = shouldBeVisible
         if visible != lastVisibilityRequest {
+            if visible {
+                // Coming back: move first, show second. The window keeps the
+                // frame it had when it was hidden, and ordering it front there
+                // and correcting on the next tick reads as a jump.
+                //
+                // But don't trust the first read. The activation notification
+                // arrives *before* the window server has brought the app's
+                // windows forward, so a poll taken right then still sees the
+                // old app's window in front — and for an app with several
+                // windows, the wrong one of its own as frontmost. Comparing two
+                // polls doesn't help: activation fires two observers that each
+                // tick synchronously, so the "two" reads are the same instant.
+                // The real signal is the window list itself: wait until the
+                // target's window is the frontmost normal window, which is what
+                // activation is about to make true. Capped, so an app with no
+                // window to bring forward can't keep Floaty hidden.
+                let now = ProcessInfo.processInfo.systemUptime
+                if showWaitStart == nil { showWaitStart = now }
+                let ready = targetIsFrontmostWindow() || now - showWaitStart! > showWaitLimit
+                guard ready else {
+                    if stillTicks >= idleAfter { schedule(interval: activeInterval) }
+                    stillTicks = 0
+                    return
+                }
+                showWaitStart = nil
+                if let parent = parentFrame() {
+                    place(against: parent)
+                    lastParentFrame = parent
+                }
+            } else {
+                showWaitStart = nil
+            }
             lastVisibilityRequest = visible
             onVisibilityChange?(visible)
         }
@@ -256,7 +293,11 @@ final class WindowDock {
             stillTicks = 0
         }
         lastParentFrame = parent
+        place(against: parent)
+    }
 
+    /// Moves the window to where it belongs next to `parent`, if it isn't there.
+    private func place(against parent: CGRect) {
         let target = dockedFrame(against: parent)
         guard target != panel.frame else { return }
 
@@ -280,19 +321,32 @@ final class WindowDock {
     /// which keeps retargeting working for apps with several real windows.
     private func parentFrame() -> CGRect? {
         guard let pid = targetPID() else { return nil }
-        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
-                                                    kCGNullWindowID) as? [[String: Any]] else { return nil }
-
-        let ourPID = ProcessInfo.processInfo.processIdentifier
         // CGWindowList is ordered front to back, and this preserves that.
-        var candidates: [CGRect] = []
+        let candidates = normalWindows().filter { $0.pid == pid }.map(\.frame)
+        guard let largest = candidates.map({ $0.width * $0.height }).max() else { return nil }
+        let mainWindow = candidates.first { $0.width * $0.height >= largest * Self.mainWindowAreaShare }
+        return mainWindow.map(Self.flipToAppKit)
+    }
 
+    /// Whether the window at the very front of the normal layer belongs to the
+    /// target — i.e. the window server has finished bringing it forward.
+    private func targetIsFrontmostWindow() -> Bool {
+        guard let pid = targetPID() else { return false }
+        return normalWindows().first?.pid == pid
+    }
+
+    /// Every real, visible, layer-0 window on screen, front to back, in
+    /// CGWindowList's top-left coordinates. Layer 0 is a normal window; panels,
+    /// menus, tooltips and our own floating window all sit above it.
+    private func normalWindows() -> [(pid: pid_t, frame: CGRect)] {
+        guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                    kCGNullWindowID) as? [[String: Any]] else { return [] }
+        let ourPID = ProcessInfo.processInfo.processIdentifier
+        var result: [(pid: pid_t, frame: CGRect)] = []
         for window in list {
-            // Layer 0 is a normal window; panels, menus, tooltips and our own
-            // floating window all sit above it.
             guard (window[kCGWindowLayer as String] as? Int) == 0,
                   let owner = window[kCGWindowOwnerPID as String] as? pid_t,
-                  owner == pid, owner != ourPID,
+                  owner != ourPID,
                   (window[kCGWindowAlpha as String] as? Double ?? 1) > 0.1,
                   let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
                   let x = bounds["X"], let y = bounds["Y"],
@@ -300,13 +354,9 @@ final class WindowDock {
                   // Floor for the obviously-not-a-window: tooltips, drag images.
                   width > 200, height > 150
             else { continue }
-
-            candidates.append(CGRect(x: x, y: y, width: width, height: height))
+            result.append((owner, CGRect(x: x, y: y, width: width, height: height)))
         }
-
-        guard let largest = candidates.map({ $0.width * $0.height }).max() else { return nil }
-        let mainWindow = candidates.first { $0.width * $0.height >= largest * Self.mainWindowAreaShare }
-        return mainWindow.map(Self.flipToAppKit)
+        return result
     }
 
     /// How much of the biggest window's area something must cover to count as a
