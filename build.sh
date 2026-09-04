@@ -5,15 +5,20 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 APP="Floaty.app"
-BUILD_DIR=".build/release"
 
 echo "→ Compiling…"
-swift build -c release
+# UNIVERSAL=1 (what the release workflow sets) builds for both architectures so
+# the download runs on Intel Macs too. Local builds stay native: half the time.
+ARCHS=()
+[[ "${UNIVERSAL:-}" == "1" ]] && ARCHS=(--arch arm64 --arch x86_64)
+swift build -c release "${ARCHS[@]}"
+# Universal builds land in a different directory; let SwiftPM say which.
+BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/Floaty"
 
 echo "→ Assembling ${APP}…"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BUILD_DIR/Floaty" "$APP/Contents/MacOS/Floaty"
+cp "$BIN" "$APP/Contents/MacOS/Floaty"
 cp Resources/Info.plist "$APP/Contents/Info.plist"
 cp -R Resources/Fonts "$APP/Contents/Resources/Fonts"
 cp Resources/Floaty.icns "$APP/Contents/Resources/Floaty.icns"

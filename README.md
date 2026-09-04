@@ -35,10 +35,13 @@ command line tools; leave off `--install` to build in place.
 
 ### Releasing
 
-`./release.sh v1.0.0` stamps the version into the bundle, builds, packages with
-`ditto` (a plain `zip` mangles the bundle's symlinks and breaks the signature),
-tags, and publishes. It refuses to run on a dirty tree so the tag matches what
-shipped.
+`./release.sh v1.0.0` tags and pushes; it refuses a dirty tree or a branch other
+than `main`, so the tag always matches what shipped. GitHub Actions
+(`.github/workflows/release.yml`) takes it from there on a macOS 26 runner:
+stamps the version from the tag into the bundle, builds a universal binary,
+packages it with `ditto` (a plain `zip` mangles the bundle's symlinks and breaks
+the signature), checks the round trip still verifies, and publishes the release
+with install notes. Every push to `main` gets a build check too.
 
 ## Use
 

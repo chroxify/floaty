@@ -1,0 +1,51 @@
+name: Release
+
+# Pushing a version tag (./release.sh v1.0.0) builds, packages and publishes.
+# The version in the bundle comes from the tag, so nothing has to be committed.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macOS 26 ships the Xcode whose actool understands Icon Composer bundles.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stamp the version from the tag
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $V" Resources/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $V" Resources/Info.plist
+
+      - name: Build
+        run: UNIVERSAL=1 ./build.sh
+
+      - name: Check the build
+        run: |
+          # A release without the compiled icon is a release with the wrong
+          # icon; fail here rather than ship it.
+          test -f Floaty.app/Contents/Resources/Assets.car || { echo "actool didn't compile Floaty.icon"; exit 1; }
+          lipo -info Floaty.app/Contents/MacOS/Floaty | grep -q 'x86_64 arm64\|arm64 x86_64' || { echo "binary isn't universal"; exit 1; }
+          codesign -v Floaty.app
+
+      - name: Package
+        # ditto, not zip: it preserves the bundle's symlinks and extended
+        # attributes, which a plain zip mangles enough to break the signature.
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent Floaty.app Floaty.zip
+          # Prove the round trip keeps the signature valid.
+          ditto -x -k Floaty.zip roundtrip && codesign -v roundtrip/Floaty.app
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sed "s|{{REPO}}|$GITHUB_REPOSITORY|g" .github/release-notes.md > notes.md
+          gh release create "$GITHUB_REF_NAME" Floaty.zip \
+            --title "Floaty ${GITHUB_REF_NAME#v}" \
+            --notes-file notes.md

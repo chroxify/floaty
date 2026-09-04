@@ -37,7 +37,7 @@ if ! curl -fL --progress-bar "$ZIP_URL" -o "$TMP/$NAME.zip"; then
   exit 1
 fi
 
-echo "→ Installing to $DEST…"
+echo "→ Installing to ${DEST}…"
 # Quit a running copy first, or the replace lands under a live process.
 osascript -e "quit app \"$NAME\"" >/dev/null 2>&1 || true
 sleep 1

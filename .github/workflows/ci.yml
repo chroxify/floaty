@@ -1,0 +1,16 @@
+name: Build
+
+# Catches a broken build on main or a PR, so a release tag is never the first
+# place it fails.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./build.sh
+      - run: codesign -v Floaty.app
