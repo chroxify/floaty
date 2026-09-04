@@ -174,9 +174,16 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
 - **Focus Inputs on Foreground** (off by default) puts the caret in the page's
   main text field whenever Floaty comes to the front, however it got there —
   shortcut, menu, dock, or a click. Right for a chat or search page, wrong for one
-  you're only reading, where it would hijack space-to-scroll. "Main" is the
-  largest text field actually visible, which skips honeypots, collapsed search
-  boxes and off-screen fields.
+  you're only reading, where it would hijack space-to-scroll.
+
+  Candidates are **scored, not measured**. Picking the biggest field gets it wrong
+  constantly — a header search box outweighs a chat composer, and a page with
+  several inputs is a coin toss. The score reads what a field appears to be *for*
+  (name, id, placeholder, aria-label), whether it's multi-line, whether it sits low
+  in the viewport where composers live rather than up in the chrome where search
+  lives, and whether its form has a send button. Hidden and off-screen fields are
+  excluded, which is what rules out the `display: none` fallback textareas
+  frameworks leave behind next to the real contenteditable composer.
 
   It runs twice: once immediately, and again 150ms later. When focus arrives from
   a click, the mouse event is dispatched *after* the window becomes key, and

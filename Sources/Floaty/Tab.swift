@@ -83,6 +83,13 @@ final class Tab: NSObject {
         webView.evaluateJavaScript(Self.focusInputScript, completionHandler: nil)
     }
 
+    /// Scores every usable field and takes the best, rather than the biggest.
+    ///
+    /// Size alone picks wrong constantly: a header search box outweighs a chat
+    /// composer, and a page with several inputs is a coin toss. So candidates are
+    /// scored on what they appear to be *for* — name, id, placeholder, aria-label
+    /// — plus where they sit, since composers live at the bottom of the viewport
+    /// and search boxes live in the chrome at the top.
     private static let focusInputScript = """
     (function () {
       var active = document.activeElement;
@@ -90,30 +97,100 @@ final class Tab: NSObject {
                      || active.isContentEditable)) {
         return false;
       }
-      var fields = document.querySelectorAll(
-        "textarea, input[type=text], input[type=search], input[type=email],"
-        + "input[type=url], input[type=tel], input:not([type]), [contenteditable=true]");
-      var best = null, bestArea = 0;
-      for (var i = 0; i < fields.length; i++) {
-        var el = fields[i];
-        if (el.disabled || el.readOnly) continue;
-        var r = el.getBoundingClientRect();
-        // Skip the off-screen and the hairline — search boxes hidden behind a
-        // toggle, honeypots, and the like.
-        if (r.width < 40 || r.height < 12) continue;
-        if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
-        var style = getComputedStyle(el);
-        if (style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') continue;
-        var area = r.width * r.height;
-        if (area > bestArea) { bestArea = area; best = el; }
+
+      var CHAT = /(message|chat|prompt|compose|reply|comment|ask|send|post|tweet|caption)/i;
+      var SEARCH = /(search|filter|find|query|lookup|command|palette|omnibox)/i;
+      // Types that are never the thing you meant to type into.
+      var SKIP_TYPES = /^(password|hidden|submit|button|reset|checkbox|radio|file|color|range|image|date|time|month|week|datetime-local)$/;
+
+      function describe(el) {
+        var className = typeof el.className === 'string' ? el.className : '';
+        return [el.getAttribute('name'), el.id, el.getAttribute('placeholder'),
+                el.getAttribute('aria-label'), el.getAttribute('aria-placeholder'),
+                el.getAttribute('data-testid'), className].filter(Boolean).join(' ');
       }
+
+      function boxOf(el) {
+        var r = el.getBoundingClientRect();
+        // Too small to be a real field, or scrolled out of sight. This is also
+        // what rules out hidden fallback textareas that frameworks leave behind.
+        if (r.width < 40 || r.height < 12) return null;
+        if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) return null;
+        var s = getComputedStyle(el);
+        if (s.visibility === 'hidden' || s.display === 'none' || s.opacity === '0') return null;
+        return r;
+      }
+
+      var nodes = document.querySelectorAll(
+        "textarea, input, [contenteditable]:not([contenteditable='false'])");
+      var best = null, bestScore = -Infinity, bestArea = 0;
+
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (el.disabled || el.readOnly) continue;
+
+        var type = (el.getAttribute('type') || '').toLowerCase();
+        if (el.tagName === 'INPUT' && SKIP_TYPES.test(type)) continue;
+
+        var box = boxOf(el);
+        if (!box) continue;
+
+        var label = describe(el);
+        var score = 0;
+
+        // What it says it's for, which beats every other signal.
+        if (CHAT.test(label)) score += 50;
+        if (SEARCH.test(label)) score -= 45;
+
+        // A composer is multi-line; a search box rarely is.
+        if (el.tagName === 'TEXTAREA' || el.isContentEditable) score += 30;
+        if (el.hasAttribute('autofocus')) score += 25;
+
+        if (type === 'search') score -= 35;
+        if (type === 'email' || type === 'url' || type === 'tel') score -= 30;
+
+        // Composers sit at the bottom, search and login sit at the top.
+        score += (box.top / Math.max(innerHeight, 1)) * 25;
+        // Wide fields are more likely to be the main one.
+        score += Math.min(box.width / Math.max(innerWidth, 1), 1) * 15;
+
+        // Page chrome is where search lives.
+        if (el.closest && el.closest('header, nav, [role=navigation], [role=search]')) {
+          score -= 30;
+        }
+        // Something to submit it with reads as a real composer.
+        if (el.closest && el.closest('form')) {
+          var form = el.closest('form');
+          if (form.querySelector("button[type=submit], [aria-label*='send' i], [data-testid*='send' i]")) {
+            score += 20;
+          }
+        }
+
+        var area = box.width * box.height;
+        if (score > bestScore || (score === bestScore && area > bestArea)) {
+          bestScore = score;
+          bestArea = area;
+          best = el;
+        }
+      }
+
       if (!best) return false;
       best.focus();
-      // Land the caret at the end rather than selecting what's already there.
       if (typeof best.setSelectionRange === 'function' && typeof best.value === 'string') {
         try { best.setSelectionRange(best.value.length, best.value.length); } catch (e) {}
       }
-      return true;
+      // Put the caret at the end of a contenteditable too.
+      if (best.isContentEditable && window.getSelection && document.createRange) {
+        try {
+          var range = document.createRange();
+          range.selectNodeContents(best);
+          range.collapse(false);
+          var sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        } catch (e) {}
+      }
+      return best.id || best.getAttribute('name') || best.tagName;
     })();
     """
 
