@@ -1,0 +1,6 @@
+.build/
+Floaty.app/
+.DS_Store
+
+# Conversation attachments, not project files.
+.kanna/
