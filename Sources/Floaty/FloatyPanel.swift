@@ -137,7 +137,9 @@ final class FloatyPanel: NSPanel {
 
     private func perform(_ action: ShortcutAction) {
         switch action {
-        case .toggleWindow, .hide: onHide?()
+        // Both global actions are handled by their Carbon registration, not here.
+        case .toggleWindow, .swapFocus: break
+        case .hide:                onHide?()
         case .newTab:              onNewTab?()
         case .closeTab:            onCloseTab?()
         case .openPage:            onEditURL?()

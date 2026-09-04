@@ -245,13 +245,8 @@ final class Tab: NSObject {
 
     // MARK: - Web view
 
-    /// Every tab shares one process pool, so they share a session the way tabs
-    /// in a browser do.
-    private static let processPool = WKProcessPool()
-
     private static func makeWebView() -> PageWebView {
         let config = WKWebViewConfiguration()
-        config.processPool = processPool
         config.websiteDataStore = .default()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.mediaTypesRequiringUserActionForPlayback = []

@@ -143,6 +143,21 @@ final class WindowDock {
         lastVisibilityRequest = nil
     }
 
+    /// The app currently being followed, so focus can be handed back to it.
+    var targetApplication: NSRunningApplication? {
+        guard isDocked, let pid = targetPID() else { return nil }
+        return NSRunningApplication(processIdentifier: pid)
+    }
+
+    /// Where focus goes when leaving Floaty: the docked window if there is one,
+    /// otherwise whatever you were in last. Tracked even when undocked, so the
+    /// swap works either way.
+    var focusReturnTarget: NSRunningApplication? {
+        if let target = targetApplication { return target }
+        guard let pid = lastActivePID else { return nil }
+        return NSRunningApplication(processIdentifier: pid)
+    }
+
     /// In whitelist mode you usually want Floaty out of the way when you're not
     /// in one of those apps. Floaty itself counts as focused, or clicking it
     /// would dismiss it.

@@ -31,6 +31,7 @@ lives behind the menubar icon.
 | | |
 |---|---|
 | Show / hide (global) | `⌃Space` |
+| Swap focus with the window behind | `⌥⇥` |
 | Hide | `esc` |
 | Open a page | `⌘L` |
 | Copy page link | `⇧⌘C` |
@@ -75,9 +76,20 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   immediately, drag elsewhere only on a hard flick. Even with DOM hit-testing
   behind it, it occasionally grabbed the window mid-selection, and a modifier
   that always means one thing beats a heuristic that is usually right.
-- **The global shortcut** uses Carbon's `RegisterEventHotKey`, so it needs no
-  Accessibility permission. If another app already owns the combo, Floaty says so
-  on launch and you can rebind it from the menu.
+- **Swap focus** (`⌥⇥`) moves between Floaty and the window behind it — the
+  docked window if there is one, otherwise the app you were last in — leaving both
+  on screen. It's deliberately a *separate* key from show/hide rather than ⌃Space
+  changing meaning when docked: merging them made hiding a docked window
+  impossible, and a shortcut that does two different things depending on state is
+  one you have to stop and think about.
+
+  It acts only when Floaty or that one window is frontmost. And rather than
+  registering it everywhere and declining to act, it's registered *only* while one
+  of the two is frontmost — a Carbon hotkey swallows its key system-wide, so an
+  inert binding would still eat `⌥⇥` in every other app.
+- **The global shortcuts** use Carbon's `RegisterEventHotKey`, so they need no
+  Accessibility permission. If another app already owns a combo, Floaty names the
+  action that won't work and you can rebind it from the menu.
 - **No menu bar** (accessory apps don't get one), so every shortcut — including
   `⌘C` / `⌘V` — is resolved in `FloatyPanel.performKeyEquivalent`.
 - **Scrollbars** are hidden by a user script injected at document start. The page

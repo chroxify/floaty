@@ -182,6 +182,8 @@ final class BrowserViewController: NSViewController {
             webView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         view.window?.makeFirstResponder(webView)
+
+        if Prefs.autoFocusInput { tab.focusMainInput() }
     }
 
     private func refresh() {

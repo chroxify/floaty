@@ -7,7 +7,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: FloatyPanel!
     var browser: BrowserViewController!
     var statusItem: NSStatusItem!
-    private var toggleHotKeyID: UInt32?
+    private var globalHotKeyIDs: [UInt32] = []
+    /// Registered and torn down as focus moves, so ⌥⇥ is only claimed while
+    /// Floaty or the window it's docked to is frontmost.
+    private var swapFocusHotKeyID: UInt32?
+    private var focusObservers: [NSObjectProtocol] = []
     private var doubleClickDrag: DoubleClickDrag?
     private let switcher = TabSwitcher()
     var dock: WindowDock!
@@ -30,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         buildStatusItem()
         registerToggleHotKey()
 
+        observeFocusForSwap()
         showPanel()
         browser.restoreTabs()
     }
@@ -162,6 +167,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             showPanel()
         }
+    }
+
+    /// Moves focus between Floaty and whatever is behind it, leaving both on
+    /// screen. Separate from show/hide on purpose: merging them into one key made
+    /// hiding a docked window impossible, and made the key mean different things
+    /// depending on state.
+    @objc func swapFocus() {
+        // Leaving Floaty for the window behind it.
+        if NSApp.isActive, let target = dock?.focusReturnTarget {
+            if #available(macOS 14.0, *) {
+                target.activate(from: .current)
+            } else {
+                target.activate(options: [])
+            }
+            return
+        }
+        // Coming back the other way, but only from the window Floaty belongs
+        // with — from anywhere else this shortcut has no business acting.
+        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        guard let parentPID = dock?.focusReturnTarget?.processIdentifier,
+              frontPID == parentPID else { return }
+        showPanel()
     }
 
     private func saveFrame() {
@@ -326,23 +353,84 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Hotkey
 
     private func registerToggleHotKey() {
-        if let id = toggleHotKeyID { HotKeyManager.shared.unregister(id) }
-        let binding = Shortcuts[.toggleWindow]
-        toggleHotKeyID = HotKeyManager.shared.register(
-            keyCode: binding.keyCode,
-            modifiers: binding.modifiers
-        ) { [weak self] in
-            self?.togglePanel()
-        }
+        globalHotKeyIDs.forEach(HotKeyManager.shared.unregister)
+        globalHotKeyIDs = []
 
-        guard toggleHotKeyID == nil else { return }
-        let shortcut = binding.display
-        let alert = NSAlert()
-        alert.messageText = "Couldn’t register \(shortcut)"
-        alert.informativeText = "Another app is already using that shortcut. "
-            + "Pick a different one from the Floaty menu."
-        alert.alertStyle = .warning
-        alert.runModal()
+        for action in ShortcutAction.allCases where action.isGlobal && !action.isContextual {
+            let binding = Shortcuts[action]
+            let id = HotKeyManager.shared.register(
+                keyCode: binding.keyCode,
+                modifiers: binding.modifiers
+            ) { [weak self] in
+                self?.perform(global: action)
+            }
+
+            if let id {
+                globalHotKeyIDs.append(id)
+                continue
+            }
+
+            let alert = NSAlert()
+            alert.messageText = "Couldn't register \(binding.display)"
+            alert.informativeText = "Another app is already using that shortcut, so "
+                + "\u{201C}\(action.label)\u{201D} won't work until you pick a different one "
+                + "from the Floaty menu."
+            alert.alertStyle = .warning
+            alert.runModal()
+        }
+    }
+
+    /// ⌥⇥ swaps between Floaty and the window behind it, and does nothing
+    /// anywhere else — so rather than registering it and ignoring the press, it's
+    /// only registered while one of those two is frontmost. Otherwise the key
+    /// would be swallowed system-wide for a shortcut that declines to act.
+    private func updateSwapFocusHotKey() {
+        let ours = ProcessInfo.processInfo.processIdentifier
+        let frontPID = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        let parentPID = dock?.focusReturnTarget?.processIdentifier
+
+        let relevant = frontPID == ours || (parentPID != nil && frontPID == parentPID)
+
+        if relevant, swapFocusHotKeyID == nil {
+            let binding = Shortcuts[.swapFocus]
+            swapFocusHotKeyID = HotKeyManager.shared.register(
+                keyCode: binding.keyCode,
+                modifiers: binding.modifiers
+            ) { [weak self] in
+                self?.swapFocus()
+            }
+        } else if !relevant, let id = swapFocusHotKeyID {
+            HotKeyManager.shared.unregister(id)
+            swapFocusHotKeyID = nil
+        }
+    }
+
+    private func observeFocusForSwap() {
+        let update: (Notification) -> Void = { [weak self] _ in
+            // After the activation settles, or frontmostApplication is still the
+            // outgoing app.
+            DispatchQueue.main.async { self?.updateSwapFocusHotKey() }
+        }
+        focusObservers = [
+            NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.didActivateApplicationNotification,
+                object: nil, queue: .main, using: update),
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification,
+                object: nil, queue: .main, using: update),
+            NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification,
+                object: nil, queue: .main, using: update),
+        ]
+        updateSwapFocusHotKey()
+    }
+
+    private func perform(global action: ShortcutAction) {
+        switch action {
+        case .toggleWindow: togglePanel()
+        case .swapFocus: swapFocus()
+        default: break
+        }
     }
 
     @objc func rebind(_ sender: NSMenuItem) {
@@ -400,7 +488,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Shortcuts[action] = captured
         }
 
-        if action.isGlobal { registerToggleHotKey() }
+        if action.isGlobal {
+            registerToggleHotKey()
+            // Contextual keys aren't in that loop; tear the old one down so the
+            // new binding is picked up on the next focus change.
+            if let id = swapFocusHotKeyID {
+                HotKeyManager.shared.unregister(id)
+                swapFocusHotKeyID = nil
+            }
+            updateSwapFocusHotKey()
+        }
         rebuildMenu()
     }
 
@@ -412,6 +509,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard alert.runModal() == .alertFirstButtonReturn else { return }
         Shortcuts.resetAll()
         registerToggleHotKey()
+        if let id = swapFocusHotKeyID {
+            HotKeyManager.shared.unregister(id)
+            swapFocusHotKeyID = nil
+        }
+        updateSwapFocusHotKey()
         rebuildMenu()
     }
 

@@ -32,6 +32,7 @@ struct Shortcut: Equatable {
 /// new action in the menu — the recorder, storage and matching are generic.
 enum ShortcutAction: String, CaseIterable {
     case toggleWindow
+    case swapFocus
     case hide
     case newTab
     case closeTab
@@ -54,6 +55,7 @@ enum ShortcutAction: String, CaseIterable {
     var label: String {
         switch self {
         case .toggleWindow: return "Show / Hide"
+        case .swapFocus: return "Swap Focus"
         case .hide: return "Hide"
         case .newTab: return "New Tab"
         case .closeTab: return "Close Tab"
@@ -75,9 +77,14 @@ enum ShortcutAction: String, CaseIterable {
         }
     }
 
-    /// The only one that has to work while another app is frontmost, so it's the
-    /// only one registered with Carbon.
-    var isGlobal: Bool { self == .toggleWindow }
+    /// These have to work while another app is frontmost, so they're the ones
+    /// registered with Carbon rather than resolved inside the window.
+    var isGlobal: Bool { self == .toggleWindow || self == .swapFocus }
+
+    /// Only registered while it can actually do something. A Carbon hotkey
+    /// swallows its key system-wide, so a binding that's inert most of the time
+    /// would still eat the key in every other app.
+    var isContextual: Bool { self == .swapFocus }
 
     var defaultShortcut: Shortcut {
         let cmd = UInt32(cmdKey)
@@ -86,6 +93,7 @@ enum ShortcutAction: String, CaseIterable {
         let control = UInt32(controlKey)
         switch self {
         case .toggleWindow:  return Shortcut(keyCode: UInt32(kVK_Space), modifiers: control)
+        case .swapFocus:     return Shortcut(keyCode: UInt32(kVK_Tab), modifiers: option)
         case .hide:          return Shortcut(keyCode: UInt32(kVK_ANSI_H), modifiers: cmd)
         case .newTab:        return Shortcut(keyCode: UInt32(kVK_ANSI_T), modifiers: cmd)
         case .closeTab:      return Shortcut(keyCode: UInt32(kVK_ANSI_W), modifiers: cmd)
