@@ -255,16 +255,25 @@ final class WindowDock {
 
     // MARK: - Geometry
 
-    /// The frame of the target app's frontmost window, in AppKit screen
-    /// coordinates.
+    /// The frame of the target app's main window, in AppKit screen coordinates.
+    ///
+    /// "Main" needs care: alerts, sheets, popovers and save dialogs are all layer
+    /// 0 too, and they arrive *in front*, so simply taking the frontmost window
+    /// means an alert steals the dock and Floaty jumps to it. They're small next
+    /// to the document window they interrupt, so anything well under the biggest
+    /// window's area is discarded, and the frontmost of what remains wins —
+    /// which keeps retargeting working for apps with several real windows.
     private func parentFrame() -> CGRect? {
         guard let pid = targetPID() else { return nil }
         guard let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
                                                     kCGNullWindowID) as? [[String: Any]] else { return nil }
 
         let ourPID = ProcessInfo.processInfo.processIdentifier
+        // CGWindowList is ordered front to back, and this preserves that.
+        var candidates: [CGRect] = []
+
         for window in list {
-            // Layer 0 is a normal document window; panels, menus and our own
+            // Layer 0 is a normal window; panels, menus, tooltips and our own
             // floating window all sit above it.
             guard (window[kCGWindowLayer as String] as? Int) == 0,
                   let owner = window[kCGWindowOwnerPID as String] as? pid_t,
@@ -273,14 +282,22 @@ final class WindowDock {
                   let bounds = window[kCGWindowBounds as String] as? [String: CGFloat],
                   let x = bounds["X"], let y = bounds["Y"],
                   let width = bounds["Width"], let height = bounds["Height"],
-                  // Skip the tiny helper windows apps keep around.
+                  // Floor for the obviously-not-a-window: tooltips, drag images.
                   width > 200, height > 150
             else { continue }
 
-            return Self.flipToAppKit(CGRect(x: x, y: y, width: width, height: height))
+            candidates.append(CGRect(x: x, y: y, width: width, height: height))
         }
-        return nil
+
+        guard let largest = candidates.map({ $0.width * $0.height }).max() else { return nil }
+        let mainWindow = candidates.first { $0.width * $0.height >= largest * Self.mainWindowAreaShare }
+        return mainWindow.map(Self.flipToAppKit)
     }
+
+    /// How much of the biggest window's area something must cover to count as a
+    /// main window rather than a dialog. Generous enough that two real windows of
+    /// different sizes both qualify, tight enough to exclude an alert.
+    private static let mainWindowAreaShare: CGFloat = 0.6
 
     /// CGWindowList reports top-left origin against the primary display; AppKit
     /// screen coordinates are bottom-left.

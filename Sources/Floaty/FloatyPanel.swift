@@ -52,14 +52,6 @@ final class FloatyPanel: NSPanel {
         }
     }
 
-    /// Esc sends the window away — the Raycast reflex.
-    override func cancelOperation(_ sender: Any?) {
-        // esc unwinds one layer at a time: the switcher, then setup, then the window.
-        if onSwitcherCancel?() == true { return }
-        guard controller?.isShowingSetup != true else { return }
-        onHide?()
-    }
-
     /// Returns true when the switcher was open and swallowed the key.
     var onSwitcherCancel: (() -> Bool)?
 
@@ -86,6 +78,22 @@ final class FloatyPanel: NSPanel {
                 }
             }()
             if let editing, NSApp.sendAction(editing, to: nil, from: self) { return true }
+        }
+
+        // esc here rather than in cancelOperation: that only arrives if the
+        // responder chain delivers it, so clicking a suggestion row or the page
+        // left esc doing nothing. performKeyEquivalent always runs.
+        if Int(event.keyCode) == kVK_Escape, flags.isEmpty {
+            if onSwitcherCancel?() == true { return true }
+            if controller?.isShowingSetup == true {
+                // Nothing behind the card means esc should put the whole window
+                // away rather than strand you on an empty one.
+                if controller?.dismissSetupIfPossible() == true { return true }
+                onHide?()
+                return true
+            }
+            onHide?()
+            return true
         }
 
         // Quit isn't reboundable — it's the one escape hatch that always has to

@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Theme.registerFonts()
+        Prefs.migrateLegacyTabsIfNeeded()
         buildPanel()
         buildStatusItem()
         registerToggleHotKey()
@@ -88,14 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.onTogglePin = { [weak self] in self?.togglePin() }
         panel.onOpacityChange = { [weak self] delta in self?.setOpacity(Prefs.opacity + delta) }
         panel.onEditURL = { [weak self] in self?.browser.presentSetup(mode: .editURL) }
-        panel.onNewTab = { [weak self] in self?.browser.presentSetup(mode: .newTab) }
+        panel.onNewTab = { [weak self] in self?.browser.toggleSetup(mode: .newTab) }
         panel.onSelectTab = { [weak self] index in self?.browser.select(index) }
         panel.onCycleTab = { [weak self] offset in self?.browser.selectNext(by: offset) }
-        panel.onCloseTab = { [weak self] in
-            // The last tab has nowhere to go, so ⌘W sends the window away instead.
-            guard self?.browser.closeActiveTab() == false else { return }
-            self?.hidePanel()
-        }
+        // Closing the last tab leaves the new-tab card, not an empty window, so
+        // ⌘W no longer needs to double as hide.
+        panel.onCloseTab = { [weak self] in self?.browser.closeActiveTab() }
 
         panel.onSwitcherStep = { [weak self] offset in
             guard let self else { return }
@@ -116,9 +115,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switcher.onCommit = { [weak self] tab in self?.browser.select(tab) }
 
         // Double-click, then keep dragging, to move the window.
-        doubleClickDrag = DoubleClickDrag(panel: panel) { [weak self] in
-            self?.browser.isShowingSetup == false
-        }
+        doubleClickDrag = DoubleClickDrag(
+            panel: panel,
+            isEnabled: { [weak self] in self?.browser.isShowingSetup == false },
+            setPageFrozen: { [weak self] frozen in self?.browser.suppressInteraction(frozen) }
+        )
 
         dock = WindowDock(panel: panel)
         dock.onStateChange = { [weak self] in self?.rebuildMenu() }
@@ -244,7 +245,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func newTab() {
         showPanel()
-        browser.presentSetup(mode: .newTab)
+        browser.toggleSetup(mode: .newTab)
     }
 
     @objc func selectTabFromMenu(_ sender: NSMenuItem) {
@@ -319,8 +320,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func closeTabFromMenu() {
-        guard browser.closeActiveTab() == false else { return }
-        hidePanel()
+        browser.closeActiveTab()
     }
 
     // MARK: - Hotkey

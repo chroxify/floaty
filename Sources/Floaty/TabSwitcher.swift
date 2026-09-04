@@ -17,6 +17,14 @@ final class TabSwitcher {
     private var tabs: [Tab] = []
     private var index = 0
 
+    /// Where the pointer was when the switcher opened, and whether it has since
+    /// moved. AppKit sends `mouseEntered` for a tracking area created underneath
+    /// a stationary cursor, so without this the panel opening beneath the pointer
+    /// pins the selection to whatever it happens to be over — and Tab then looks
+    /// like it isn't working.
+    private var pointerAtOpen: NSPoint?
+    private var pointerHasMoved = false
+
     var isVisible: Bool { panel != nil }
 
     /// Called on release with the tab to land on. A tab, not an index, because
@@ -73,8 +81,11 @@ final class TabSwitcher {
         }
         panel.setFrameOrigin(frame.origin)
 
+        pointerAtOpen = NSEvent.mouseLocation
+        pointerHasMoved = false
+
         panel.onHoverIndex = { [weak self] hovered in
-            guard let self else { return }
+            guard let self, self.pointerMovedSinceOpening() else { return }
             self.index = hovered
             self.panel?.select(hovered)
         }
@@ -121,6 +132,19 @@ final class TabSwitcher {
         }
     }
 
+    /// Latches once the pointer genuinely moves, so only deliberate hovers count.
+    private func pointerMovedSinceOpening() -> Bool {
+        if pointerHasMoved { return true }
+        guard let origin = pointerAtOpen else {
+            pointerHasMoved = true
+            return true
+        }
+        let now = NSEvent.mouseLocation
+        guard hypot(now.x - origin.x, now.y - origin.y) > 2 else { return false }
+        pointerHasMoved = true
+        return true
+    }
+
     private func dismiss() {
         if let flagsMonitor { NSEvent.removeMonitor(flagsMonitor) }
         if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
@@ -131,6 +155,8 @@ final class TabSwitcher {
         panel?.orderOut(nil)
         panel = nil
         tabs = []
+        pointerAtOpen = nil
+        pointerHasMoved = false
     }
 }
 

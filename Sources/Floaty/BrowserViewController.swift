@@ -136,15 +136,18 @@ final class BrowserViewController: NSViewController {
     /// decide what that means (we hide the window rather than leave it empty).
     @discardableResult
     func closeTab(at index: Int) -> Bool {
-        guard tabs.indices.contains(index), tabs.count > 1 else { return false }
+        guard tabs.indices.contains(index) else { return false }
         let tab = tabs.remove(at: index)
         recentlyUsed.removeAll { $0 === tab }
         tab.webView.removeFromSuperview()
-        if activeIndex >= tabs.count { activeIndex = tabs.count - 1 }
+        if activeIndex >= tabs.count { activeIndex = max(tabs.count - 1, 0) }
         else if index < activeIndex { activeIndex -= 1 }
         showActiveTab()
         persist()
         refresh()
+        // Nothing left to show, so the new-tab card takes over rather than
+        // leaving an empty window.
+        if tabs.isEmpty { presentSetup(mode: .firstRun) }
         return true
     }
 
@@ -201,6 +204,7 @@ final class BrowserViewController: NSViewController {
 
     func load(_ string: String) { activeTab?.load(string) }
     func focusMainInput() { activeTab?.focusMainInput() }
+    func suppressInteraction(_ on: Bool) { activeTab?.suppressInteraction(on) }
     func reload() { activeTab?.reload() }
     func hardReload() { activeTab?.webView.reloadFromOrigin() }
     func goBack() { activeTab?.webView.goBack() }
@@ -224,6 +228,26 @@ final class BrowserViewController: NSViewController {
         case firstRun   // nothing open yet
         case newTab     // ⌘T
         case editURL    // ⌘L, retargets the current tab
+    }
+
+    /// ⌘T twice should put you back where you were, not just re-focus the field.
+    /// With no tabs there's nothing behind the card, so it stays.
+    func toggleSetup(mode: SetupMode) {
+        if setup != nil {
+            if tabs.isEmpty { setup?.focus() } else { dismissSetup() }
+            return
+        }
+        presentSetup(mode: mode)
+    }
+
+    /// esc from anywhere in the card, not just the field. Falls through to hiding
+    /// the window when there's no page to go back to.
+    @discardableResult
+    func dismissSetupIfPossible() -> Bool {
+        guard setup != nil else { return false }
+        guard !tabs.isEmpty else { return false }
+        dismissSetup()
+        return true
     }
 
     func presentSetup(mode: SetupMode) {
@@ -252,8 +276,6 @@ final class BrowserViewController: NSViewController {
             placeholder: "example.com"
         )
         overlay.translatesAutoresizingMaskIntoConstraints = false
-        // There's nothing behind the first run, so esc has nowhere to go.
-        overlay.isDismissable = mode != .firstRun
         overlay.onSubmit = { [weak self] text in
             guard let self else { return }
             switch mode {
@@ -273,6 +295,13 @@ final class BrowserViewController: NSViewController {
             overlay.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             overlay.trailingAnchor.constraint(equalTo: content.trailingAnchor),
         ])
+
+        // From the cache rather than the live tabs: it also covers pages that
+        // aren't open, and it survives a restart.
+        overlay.faviconProvider = { url in FaviconCache.image(for: url) }
+        // Everything, including pages already open — picking one opens a second
+        // tab on it, which is a reasonable thing to want.
+        overlay.setSuggestions(History.entries)
 
         if mode == .editURL { overlay.prefill(currentURLString) }
         setup = overlay

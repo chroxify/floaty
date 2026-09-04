@@ -20,10 +20,16 @@ final class DoubleClickDrag {
 
     private unowned let panel: NSWindow
     private let isEnabled: () -> Bool
+    /// Told when a drag starts and stops, so the page can be frozen for its
+    /// duration rather than selecting text under the moving window.
+    private let setPageFrozen: (Bool) -> Void
 
-    init(panel: NSWindow, isEnabled: @escaping () -> Bool) {
+    init(panel: NSWindow,
+         isEnabled: @escaping () -> Bool,
+         setPageFrozen: @escaping (Bool) -> Void) {
         self.panel = panel
         self.isEnabled = isEnabled
+        self.setPageFrozen = setPageFrozen
         monitor = NSEvent.addLocalMonitorForEvents(
             matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
         ) { [weak self] event in
@@ -55,6 +61,7 @@ final class DoubleClickDrag {
             case .armed:
                 state = .dragging(windowOrigin: panel.frame.origin,
                                   mouseOrigin: NSEvent.mouseLocation)
+                setPageFrozen(true)
                 return nil
             case .dragging(let windowOrigin, let mouseOrigin):
                 let now = NSEvent.mouseLocation
@@ -68,6 +75,7 @@ final class DoubleClickDrag {
         case .leftMouseUp:
             if case .dragging = state {
                 state = .idle
+                setPageFrozen(false)
                 Prefs.frame = panel.frame
                 return nil
             }

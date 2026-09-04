@@ -65,6 +65,12 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   dragging, or `⌘`-drag. Double-click-drag costs word-by-word selection
   extension; `⌘`-drag costs `⌘`-click on a link.
 
+  A double-click drag **freezes the page** for its duration — the selection the
+  double-click made is cleared, and `user-select` and `pointer-events` are
+  suppressed until you let go. The double-click has already selected a word by
+  the time the drag begins, so without this the page keeps that selection and
+  goes on reacting to the pointer while the window slides out from under it.
+
   A gesture-detecting version was tried and removed: drag empty page area
   immediately, drag elsewhere only on a hard flick. Even with DOM hit-testing
   behind it, it occasionally grabbed the window mid-selection, and a modifier
@@ -84,6 +90,11 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   from is one step away — the system app switcher's behaviour. Left-to-right bar
   order is the other option, under "⌃⇥ Cycles By" in the menu. Recency has to be
   tracked as you go; it can't be reconstructed afterwards.
+- **The switcher ignores hover until the pointer moves.** AppKit sends
+  `mouseEntered` for a tracking area created underneath a stationary cursor, so a
+  panel opening beneath the pointer would pin the selection to whatever it
+  happened to be over — and ⌃⇥ would appear not to work at all. The hover handler
+  latches on once the pointer has genuinely moved more than 2pt.
 - **The switcher** closes on blur. Switching apps mid-hold means the ⌃ release
   never arrives, so it would otherwise sit there forever.
 - **The switcher is `⌃⇥`, not `⌘⇥`.** The WindowServer claims `⌘⇥` before any app
@@ -137,6 +148,14 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   resized from the bottom. Drop it on the other side and
   it re-docks there (in Auto; a manual Left/Right stays put). "Align to Top"
   resets the offset.
+
+  It follows the app's **main window**, not whatever it happens to put in front.
+  Alerts, sheets, save dialogs and popovers are all layer 0 as well, and they
+  arrive frontmost, so simply taking the front window meant an alert stole the
+  dock and Floaty jumped to it. They're small next to the document window they
+  interrupt, so anything under 60% of the biggest window's area is discarded and
+  the frontmost of what remains wins — which keeps retargeting working for apps
+  with several real windows of differing sizes.
 
   If the target has no window right now — minimised, or between windows — Floaty
   stays where it is rather than flinging itself somewhere.

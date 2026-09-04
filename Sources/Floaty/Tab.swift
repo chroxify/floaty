@@ -117,6 +117,40 @@ final class Tab: NSObject {
     })();
     """
 
+    /// Freezes the page while the window is being dragged from it.
+    ///
+    /// A double-click has already selected a word by the time the drag starts, and
+    /// without this the page keeps that selection — and keeps reacting to the
+    /// pointer — while the window moves under it.
+    func suppressInteraction(_ suppressed: Bool) {
+        webView.evaluateJavaScript(suppressed ? Self.freezeScript : Self.thawScript,
+                                   completionHandler: nil)
+    }
+
+    private static let guardElementID = "__floaty-drag-guard"
+
+    private static let freezeScript = """
+    (function () {
+      var id = '\(guardElementID)';
+      if (!document.getElementById(id)) {
+        var style = document.createElement('style');
+        style.id = id;
+        style.textContent = '*,*::before,*::after{user-select:none!important;'
+          + '-webkit-user-select:none!important;pointer-events:none!important}';
+        (document.head || document.documentElement).appendChild(style);
+      }
+      // Drop the word the double-click selected on the way in.
+      if (window.getSelection) { window.getSelection().removeAllRanges(); }
+    })();
+    """
+
+    private static let thawScript = """
+    (function () {
+      var el = document.getElementById('\(guardElementID)');
+      if (el) { el.remove(); }
+    })();
+    """
+
     // MARK: - Snapshot
 
     /// Only works while the view is in a window and drawn, so call it before
@@ -195,28 +229,18 @@ final class Tab: NSObject {
                 return
             }
 
-            let mark = Self.circular(image)
+            let mark = FaviconCache.circular(image)
             DispatchQueue.main.async {
                 self?.favicon = mark
                 self?.faviconHost = host
+                // Cache it so the new-tab suggestions can show a mark for pages
+                // that aren't open — which is all of them, by definition.
+                if let host { FaviconCache.store(mark, host: host) }
                 self?.onChange?()
                 completion(true)
             }
         }
         faviconTask?.resume()
-    }
-
-    /// Favicons arrive in every shape there is — full-bleed squares, rounded
-    /// squares, circles, bare glyphs on transparency. Clipping them all to a
-    /// circle is the only treatment that looks deliberate across a row of them;
-    /// anything already round or already transparent is unaffected.
-    private static func circular(_ image: NSImage) -> NSImage {
-        let size = NSSize(width: 16, height: 16)
-        return NSImage(size: size, flipped: false) { rect in
-            NSBezierPath(ovalIn: rect).addClip()
-            image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1)
-            return true
-        }
     }
 
     // MARK: - Web view
@@ -353,5 +377,10 @@ final class PageWebView: WKWebView {
 extension Tab: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loadFavicon()
+        // Record once the page has settled, so the entry carries a real title
+        // rather than the URL it started from.
+        if let url = webView.url?.absoluteString {
+            History.record(url: url, title: webView.title ?? "")
+        }
     }
 }

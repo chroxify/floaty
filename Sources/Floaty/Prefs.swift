@@ -23,6 +23,7 @@ enum Prefs {
         static let autoFocusInput = "autoFocusInput"
         /// Superseded by `tabs`; still read once so old installs migrate.
         static let slots = "slots"
+        static let didMigrateTabs = "didMigrateTabs"
     }
 
     static var lastURL: String {
@@ -62,18 +63,26 @@ enum Prefs {
         set { d.set(newValue, forKey: Key.allSpaces) }
     }
 
-    /// The open tabs, in bar order. Restored on launch.
+    /// The open tabs, in bar order. Restored on launch. No tabs is a real state
+    /// — it's what shows the new-tab card — so this never invents one.
     static var tabs: [String] {
-        get {
-            let stored = d.stringArray(forKey: Key.tabs) ?? []
-            // Migrate anyone who was using the old quick-switch slots.
-            guard stored.isEmpty else { return stored }
-            let legacy = (d.stringArray(forKey: Key.slots) ?? []).filter { !$0.isEmpty }
-            let seed = legacy.isEmpty ? [lastURL].filter { !$0.isEmpty } : legacy
-            if !seed.isEmpty { d.set(seed, forKey: Key.tabs) }
-            return seed
-        }
+        get { d.stringArray(forKey: Key.tabs) ?? [] }
         set { d.set(newValue, forKey: Key.tabs) }
+    }
+
+    /// One-time move off the old quick-switch slots, run at launch.
+    ///
+    /// This used to live in the `tabs` getter, seeding from `lastURL` whenever
+    /// the list came back empty. That meant closing every tab immediately
+    /// resurrected one — the "why is there always a default tab" bug. Migration
+    /// is a once-ever event, so it's recorded as one.
+    static func migrateLegacyTabsIfNeeded() {
+        guard !d.bool(forKey: Key.didMigrateTabs) else { return }
+        d.set(true, forKey: Key.didMigrateTabs)
+        guard (d.stringArray(forKey: Key.tabs) ?? []).isEmpty else { return }
+        let legacy = (d.stringArray(forKey: Key.slots) ?? []).filter { !$0.isEmpty }
+        let seed = legacy.isEmpty ? [lastURL].filter { !$0.isEmpty } : legacy
+        if !seed.isEmpty { tabs = seed }
     }
 
     static var activeTab: Int {

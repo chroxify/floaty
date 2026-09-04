@@ -6,6 +6,8 @@ final class SetupView: NSView {
 
     var onSubmit: ((String) -> Void)?
     var onCancel: (() -> Void)?
+    /// Favicons for suggestions, when this session happens to have one.
+    var faviconProvider: ((String) -> NSImage?)?
     /// False on first run — there is nothing to go back to, so esc shouldn't dismiss.
     var isDismissable = true
 
@@ -16,6 +18,17 @@ final class SetupView: NSView {
     private let descriptionLabel = NSTextField(labelWithString: "")
     private let fieldBox = NSView()
     private let field = SetupTextField()
+    private let suggestions = NSStackView()
+
+    /// Everything we could offer, and the slice currently shown.
+    private var pool: [HistoryEntry] = []
+    private var shown: [HistoryEntry] = []
+    /// -1 means "open what's typed" rather than a suggestion.
+    private var selection = -1
+    /// More than this and the card stops being a card.
+    private let maxRows = 5
+    /// Held so the block can be re-centred as the list grows and shrinks.
+    private var blockCentre: NSLayoutConstraint!
 
     override var acceptsFirstResponder: Bool { false }
 
@@ -83,9 +96,16 @@ final class SetupView: NSView {
         addSubview(descriptionLabel)
         addSubview(fieldBox)
 
+        suggestions.translatesAutoresizingMaskIntoConstraints = false
+        suggestions.orientation = .vertical
+        suggestions.spacing = 1
+        suggestions.alignment = .leading
+        addSubview(suggestions)
+
         // Offset so the block as a whole reads optically centered, not the tile.
-        let centerY = tile.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -68)
-        centerY.priority = .defaultHigh
+        blockCentre = tile.centerYAnchor.constraint(equalTo: centerYAnchor, constant: -68)
+        blockCentre.priority = .defaultHigh
+        let centerY = blockCentre!
 
         NSLayoutConstraint.activate([
             backdrop.topAnchor.constraint(equalTo: topAnchor),
@@ -118,6 +138,10 @@ final class SetupView: NSView {
             field.leadingAnchor.constraint(equalTo: fieldBox.leadingAnchor, constant: 11),
             field.trailingAnchor.constraint(equalTo: fieldBox.trailingAnchor, constant: -11),
             field.centerYAnchor.constraint(equalTo: fieldBox.centerYAnchor),
+
+            suggestions.topAnchor.constraint(equalTo: fieldBox.bottomAnchor, constant: 8),
+            suggestions.leadingAnchor.constraint(equalTo: fieldBox.leadingAnchor),
+            suggestions.trailingAnchor.constraint(equalTo: fieldBox.trailingAnchor),
         ])
 
         applyColors()
@@ -163,6 +187,69 @@ final class SetupView: NSView {
 
     func prefill(_ text: String) {
         field.stringValue = text
+        reloadSuggestions()
+    }
+
+    /// Pages to offer under the field. Passing an empty list hides the section
+    /// entirely rather than leaving a gap.
+    func setSuggestions(_ entries: [HistoryEntry]) {
+        pool = entries
+        reloadSuggestions()
+    }
+
+    private func reloadSuggestions() {
+        let query = field.stringValue
+        shown = Array(History.match(query, in: pool).prefix(maxRows))
+        // Typing narrows to one obvious answer; keep it highlighted so return
+        // opens it. With nothing typed, return should still open what you type.
+        selection = query.trimmingCharacters(in: .whitespaces).isEmpty ? -1 : (shown.isEmpty ? -1 : 0)
+
+        suggestions.arrangedSubviews.forEach {
+            suggestions.removeArrangedSubview($0)
+            $0.removeFromSuperview()
+        }
+        for (index, entry) in shown.enumerated() {
+            let row = HistoryRow(entry: entry, favicon: faviconProvider?(entry.url))
+            row.onPick = { [weak self] in self?.onSubmit?(entry.url) }
+            row.onHover = { [weak self] in self?.select(index) }
+            suggestions.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: suggestions.widthAnchor).isActive = true
+        }
+        // Lift the whole block by half the list, so card and suggestions stay
+        // centred together rather than the card sitting still while the list
+        // pushes off the bottom.
+        let listHeight = shown.isEmpty
+            ? 0
+            : CGFloat(shown.count) * HistoryRow.height + CGFloat(shown.count - 1)
+        blockCentre.constant = -68 - listHeight / 2
+        applySelection()
+    }
+
+    private func select(_ index: Int) {
+        selection = index
+        applySelection()
+    }
+
+    private func applySelection() {
+        for (index, view) in suggestions.arrangedSubviews.enumerated() {
+            (view as? HistoryRow)?.setSelected(index == selection)
+        }
+    }
+
+    /// Arrow keys walk the list, and stepping off the top returns to the field so
+    /// return opens whatever you typed.
+    fileprivate func moveSelection(by offset: Int) {
+        guard !shown.isEmpty else { return }
+        let next = selection + offset
+        selection = next < -1 ? shown.count - 1 : (next >= shown.count ? -1 : next)
+        applySelection()
+    }
+
+    /// What return should open: the highlighted suggestion, or the typed text.
+    fileprivate var committedText: String? {
+        if shown.indices.contains(selection) { return shown[selection].url }
+        let typed = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty ? nil : typed
     }
 
     /// Overlays fade; they never slide or scale in.
@@ -182,16 +269,21 @@ final class SetupView: NSView {
 // MARK: - NSTextFieldDelegate
 
 extension SetupView: NSTextFieldDelegate {
+    func controlTextDidChange(_ obj: Notification) {
+        reloadSuggestions()
+    }
+
     func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
         switch selector {
         case #selector(NSResponder.insertNewline(_:)):
-            let text = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return true }
+            guard let text = committedText else { return true }
             onSubmit?(text)
             return true
-        case #selector(NSResponder.cancelOperation(_:)):
-            guard isDismissable else { return true }
-            onCancel?()
+        case #selector(NSResponder.moveDown(_:)):
+            moveSelection(by: 1)
+            return true
+        case #selector(NSResponder.moveUp(_:)):
+            moveSelection(by: -1)
             return true
         default:
             return false
