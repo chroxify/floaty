@@ -9,12 +9,36 @@ keystroke or a menu item.
 ## Install
 
 ```bash
-./build.sh --install
+curl -fsSL https://raw.githubusercontent.com/chroxify/floaty/main/install.sh | bash
 ```
 
-Builds `Floaty.app`, copies it to `/Applications` and launches it. Leave off
-`--install` to build in place. The app is ad-hoc signed, so the first launch may
-need a right-click → **Open**.
+Downloads the latest release into `/Applications` and launches it.
+
+It's a command rather than a download link because the app is ad-hoc signed, not
+notarized — there's no Apple Developer ID behind it. macOS quarantines anything
+that arrives through a browser, and rejects an un-notarized quarantined app with
+"Floaty is damaged and can't be opened", which is a lie that sends people off
+re-downloading it. The script clears that flag (`xattr -dr com.apple.quarantine`),
+which is the one thing it does that a plain unzip wouldn't.
+
+That's a real trust ask, so [read it first](install.sh) — it's 40 lines.
+
+### Or build it
+
+```bash
+git clone https://github.com/chroxify/floaty.git
+cd floaty && ./build.sh --install
+```
+
+Nothing to strip: a locally compiled app is never quarantined. Needs the Xcode
+command line tools; leave off `--install` to build in place.
+
+### Releasing
+
+`./release.sh v1.0.0` stamps the version into the bundle, builds, packages with
+`ditto` (a plain `zip` mangles the bundle's symlinks and breaks the signature),
+tags, and publishes. It refuses to run on a dirty tree so the tag matches what
+shipped.
 
 ## Use
 

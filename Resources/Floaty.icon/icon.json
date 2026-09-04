@@ -1,8 +1,8 @@
 {
   "fill" : {
     "linear-gradient" : [
-      "display-p3:0.22058,0.13757,0.95996,1.00000",
-      "extended-srgb:0.00000,0.53333,1.00000,1.00000"
+      "display-p3:0.29733,0.35601,0.94830,1.00000",
+      "display-p3:0.20746,0.09821,0.96393,1.00000"
     ]
   },
   "groups" : [
@@ -11,14 +11,14 @@
         {
           "blend-mode" : "normal",
           "fill" : {
-            "solid" : "display-p3:0.64541,0.73451,1.00000,1.00000"
+            "solid" : "display-p3:0.96875,0.96875,0.96875,1.00000"
           },
           "glass" : true,
           "hidden" : false,
           "image-name" : "square.on.square.dashed.svg",
           "name" : "square.on.square.dashed",
           "position" : {
-            "scale" : 11.5,
+            "scale" : 10.5,
             "translation-in-points" : [
               0,
               0
