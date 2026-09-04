@@ -75,18 +75,12 @@ final class BrowserViewController: NSViewController {
     // MARK: - Restoring
 
     func restoreTabs() {
-        // Pair each URL with its zoom *before* dropping empties, so the two lists
-        // stay aligned. Zooms may be shorter than tabs (saves from before zoom
-        // was remembered); anything missing is 1.0.
-        let zooms = Prefs.tabZooms
-        let saved = Prefs.tabs.enumerated()
-            .map { (url: $0.element, zoom: $0.offset < zooms.count ? zooms[$0.offset] : 1.0) }
-            .filter { !$0.url.isEmpty }
+        let saved = Prefs.tabs.filter { !$0.isEmpty }
         guard !saved.isEmpty else {
             presentSetup(mode: .firstRun)
             return
         }
-        tabs = saved.map { makeTab(url: $0.url, zoom: $0.zoom) }
+        tabs = saved.map { makeTab(url: $0) }
         activeIndex = min(max(Prefs.activeTab, 0), tabs.count - 1)
         // Nothing has been used yet this session, so seed recency with the
         // restored tab up front and bar order behind it.
@@ -96,8 +90,8 @@ final class BrowserViewController: NSViewController {
         refresh()
     }
 
-    private func makeTab(url: String?, zoom: Double = 1.0) -> Tab {
-        let tab = Tab(url: url, zoom: zoom)
+    private func makeTab(url: String?) -> Tab {
+        let tab = Tab(url: url)
         tab.onChange = { [weak self] in self?.refresh() }
         tab.webView.uiDelegate = self
         return tab
@@ -200,10 +194,7 @@ final class BrowserViewController: NSViewController {
     }
 
     private func persist() {
-        // Filter as pairs so a tab with no URL yet drops out of both lists.
-        let live = tabs.filter { !$0.urlString.isEmpty }
-        Prefs.tabs = live.map(\.urlString)
-        Prefs.tabZooms = live.map(\.zoom)
+        Prefs.tabs = tabs.map(\.urlString).filter { !$0.isEmpty }
         Prefs.activeTab = activeIndex
         Prefs.lastURL = currentURLString
     }
@@ -221,8 +212,8 @@ final class BrowserViewController: NSViewController {
     func goBack() { activeTab?.webView.goBack() }
     func goForward() { activeTab?.webView.goForward() }
 
-    // Zoom belongs to the tab and is saved as soon as it changes, so a relaunch
-    // brings every tab back at the size you left it.
+    // Zoom is per site: saved the moment it changes, applied to every open tab
+    // on that site, and what a tab on that site opens at after a relaunch.
     func zoomIn() { adjustZoom(by: Tab.zoomStep) }
     func zoomOut() { adjustZoom(by: -Tab.zoomStep) }
     func zoomReset() { setZoom(1.0) }
@@ -237,7 +228,11 @@ final class BrowserViewController: NSViewController {
     private func setZoom(_ value: Double) {
         guard let tab = activeTab else { return }
         tab.zoom = value
-        persist()
+        Prefs.setZoom(tab.zoom, forSite: tab.siteKey)
+        // Same site, same zoom — a second tab on it shouldn't lag behind.
+        for other in tabs where other !== tab && other.siteKey == tab.siteKey {
+            other.zoom = tab.zoom
+        }
     }
 
     // MARK: - Setup overlay

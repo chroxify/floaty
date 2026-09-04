@@ -229,11 +229,13 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   panel — click and scroll it without the other app ever losing focus, so there's
   no round trip to pay for. Only the active app receives keystrokes, so that mode
   costs typing into the page; ⌃Space still activates properly when you want it.
-- **Zoom is per tab and remembered.** `⌘+` / `⌘-` change only the tab you're on,
-  and each tab comes back at its own zoom after a relaunch. It's stored next to
-  the tab list rather than on the web view, since a web view doesn't outlive the
-  process. Steps snap to a tenth, so repeated presses can't drift into float
-  noise.
+- **Zoom is per site and remembered**, the way Safari does it. `⌘+` / `⌘-` set
+  the level for the site you're on: every open tab on that site follows, a tab
+  that navigates to another site picks up *that* site's level, and it all comes
+  back after a relaunch. A site is host plus port, so `localhost:3000` and
+  `localhost:3210` are different apps, as they usually are. Only non-default
+  levels are stored, and steps snap to a tenth so repeated presses can't drift
+  into float noise.
 - Window position, size, opacity, pin state and last URL persist across launches.
 
 ## Icon

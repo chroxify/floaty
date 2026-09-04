@@ -36,9 +36,13 @@ final class Tab: NSObject {
     static let zoomRange: ClosedRange<Double> = 0.4...3.0
     static let zoomStep = 0.1
 
-    /// Page zoom, owned by the tab rather than read off the web view so it's
-    /// something the tab can be restored with. Clamped; survives navigation
-    /// within the tab because it lives on the web view, not the page.
+    /// The site this tab is on, for zoom purposes. Tracked separately from the
+    /// URL so a cross-site navigation is detectable as a change of key.
+    private(set) var siteKey: String?
+
+    /// Page zoom. The tab applies it; the site owns it (see `Prefs.siteZooms`).
+    /// Setting this only changes the view — the controller saves it per site
+    /// and pushes it to other tabs on the same site.
     var zoom: Double {
         didSet {
             zoom = min(max(zoom, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
@@ -46,13 +50,22 @@ final class Tab: NSObject {
         }
     }
 
-    init(url: String?, zoom: Double = 1.0) {
-        self.zoom = min(max(zoom, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
+    init(url: String?) {
+        zoom = 1.0
         super.init()
-        webView.pageZoom = self.zoom
         webView.navigationDelegate = self
         observe()
         if let url { load(url) }
+    }
+
+    /// Adopt the zoom for wherever the tab is now. Called before a load starts
+    /// so the page never flashes at 1.0 first, and again whenever the URL moves
+    /// to a different site.
+    private func adoptSiteZoom(for url: URL?) {
+        let key = Prefs.siteKey(for: url)
+        guard key != siteKey else { return }
+        siteKey = key
+        zoom = Prefs.zoom(forSite: key)
     }
 
     deinit {
@@ -63,6 +76,7 @@ final class Tab: NSObject {
 
     func load(_ string: String) {
         guard let url = URLNormalizer.url(from: string) else { return }
+        adoptSiteZoom(for: url)
         webView.load(URLRequest(url: url))
     }
 
@@ -82,6 +96,8 @@ final class Tab: NSObject {
                     self.favicon = nil
                     self.faviconHost = nil
                 }
+                // A link to another site means that site's zoom, not this one's.
+                self.adoptSiteZoom(for: wv.url)
                 self.onChange?()
             },
         ]

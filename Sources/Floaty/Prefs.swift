@@ -12,7 +12,7 @@ enum Prefs {
         static let pinned = "pinned"
         static let allSpaces = "allSpaces"
         static let tabs = "tabs"
-        static let tabZooms = "tabZooms"
+        static let siteZooms = "siteZooms"
         static let activeTab = "activeTab"
         static let cycleByRecent = "cycleByRecent"
         static let dockMode = "dockMode"
@@ -71,11 +71,37 @@ enum Prefs {
         set { d.set(newValue, forKey: Key.tabs) }
     }
 
-    /// Each tab's page zoom, index-aligned with `tabs`. Written together with it
-    /// so the two never drift; a tab with no entry (older saves) is at 1.0.
-    static var tabZooms: [Double] {
-        get { d.array(forKey: Key.tabZooms) as? [Double] ?? [] }
-        set { d.set(newValue, forKey: Key.tabZooms) }
+    // MARK: - Zoom
+
+    /// Page zoom is per site, not per tab — the way Safari does it. Two tabs on
+    /// the same site share a level, and a tab that navigates to another site
+    /// picks up that site's level. Keyed by `siteKey`; only non-default levels
+    /// are stored, so resetting a site removes its entry.
+    private static var siteZooms: [String: Double] {
+        get { d.dictionary(forKey: Key.siteZooms) as? [String: Double] ?? [:] }
+        set { d.set(newValue, forKey: Key.siteZooms) }
+    }
+
+    /// What a URL is "the same site" as: host plus port, lowercased, without
+    /// a leading www. The port matters here more than in a browser — half of
+    /// what gets floated is localhost, and :3000 and :3210 are different apps.
+    static func siteKey(for url: URL?) -> String? {
+        guard let host = url?.host?.lowercased(), !host.isEmpty else { return nil }
+        let bare = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        if let port = url?.port { return "\(bare):\(port)" }
+        return bare
+    }
+
+    static func zoom(forSite key: String?) -> Double {
+        guard let key else { return 1.0 }
+        return siteZooms[key] ?? 1.0
+    }
+
+    static func setZoom(_ zoom: Double, forSite key: String?) {
+        guard let key else { return }
+        var all = siteZooms
+        if abs(zoom - 1.0) < 0.001 { all.removeValue(forKey: key) } else { all[key] = zoom }
+        siteZooms = all
     }
 
     /// One-time move off the old quick-switch slots, run at launch.
