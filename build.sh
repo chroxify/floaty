@@ -9,11 +9,16 @@ APP="Floaty.app"
 echo "→ Compiling…"
 # UNIVERSAL=1 (what the release workflow sets) builds for both architectures so
 # the download runs on Intel Macs too. Local builds stay native: half the time.
-ARCHS=()
-[[ "${UNIVERSAL:-}" == "1" ]] && ARCHS=(--arch arm64 --arch x86_64)
-swift build -c release "${ARCHS[@]}"
-# Universal builds land in a different directory; let SwiftPM say which.
-BIN="$(swift build -c release "${ARCHS[@]}" --show-bin-path)/Floaty"
+# A plain string, not an array: bash 3.2 (macOS's /bin/bash) treats an empty
+# array as unbound under set -u.
+ARCHS=""
+if [[ "${UNIVERSAL:-}" == "1" ]]; then
+  ARCHS="--arch arm64 --arch x86_64"
+fi
+# shellcheck disable=SC2086  # word-splitting is the point
+swift build -c release $ARCHS
+# Universal builds can land in a different directory; let SwiftPM say which.
+BIN="$(swift build -c release $ARCHS --show-bin-path)/Floaty"
 
 echo "→ Assembling ${APP}…"
 rm -rf "$APP"

@@ -38,14 +38,22 @@ REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 
 echo "→ Tagging ${VERSION}…"
 git tag -a "$VERSION" -m "Floaty ${VERSION#v}"
-git push origin main "$VERSION"
+# Two pushes, not one: a tag that arrives in the same push as the commit it
+# points at can fail to start its workflow.
+git push origin main
+git push origin "$VERSION"
 
 echo "→ Waiting for the build…"
-sleep 10
-RUN=$(gh run list --workflow=release.yml --branch "$VERSION" --limit 1 --json databaseId -q '.[0].databaseId' || true)
+RUN=""
+for _ in $(seq 1 12); do
+  sleep 5
+  RUN=$(gh run list --workflow=release.yml --branch "$VERSION" --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
+  [[ -n "$RUN" ]] && break
+done
 if [[ -n "$RUN" ]]; then
   gh run watch "$RUN" --exit-status
   echo "✓ https://github.com/$REPO/releases/tag/$VERSION"
 else
-  echo "  Couldn't find the run yet: https://github.com/$REPO/actions"
+  echo "  No run started within a minute: https://github.com/$REPO/actions" >&2
+  exit 1
 fi

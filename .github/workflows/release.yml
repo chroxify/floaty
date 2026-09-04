@@ -4,7 +4,7 @@ name: Release
 # The version in the bundle comes from the tag, so nothing has to be committed.
 on:
   push:
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+    tags: ["v*.*.*"]
 
 permissions:
   contents: write
