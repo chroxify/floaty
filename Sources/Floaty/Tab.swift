@@ -33,8 +33,23 @@ final class Tab: NSObject {
 
     var urlString: String { webView.url?.absoluteString ?? "" }
 
-    init(url: String?) {
+    static let zoomRange: ClosedRange<Double> = 0.4...3.0
+    static let zoomStep = 0.1
+
+    /// Page zoom, owned by the tab rather than read off the web view so it's
+    /// something the tab can be restored with. Clamped; survives navigation
+    /// within the tab because it lives on the web view, not the page.
+    var zoom: Double {
+        didSet {
+            zoom = min(max(zoom, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
+            webView.pageZoom = zoom
+        }
+    }
+
+    init(url: String?, zoom: Double = 1.0) {
+        self.zoom = min(max(zoom, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
         super.init()
+        webView.pageZoom = self.zoom
         webView.navigationDelegate = self
         observe()
         if let url { load(url) }

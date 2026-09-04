@@ -12,6 +12,7 @@ enum Prefs {
         static let pinned = "pinned"
         static let allSpaces = "allSpaces"
         static let tabs = "tabs"
+        static let tabZooms = "tabZooms"
         static let activeTab = "activeTab"
         static let cycleByRecent = "cycleByRecent"
         static let dockMode = "dockMode"
@@ -68,6 +69,13 @@ enum Prefs {
     static var tabs: [String] {
         get { d.stringArray(forKey: Key.tabs) ?? [] }
         set { d.set(newValue, forKey: Key.tabs) }
+    }
+
+    /// Each tab's page zoom, index-aligned with `tabs`. Written together with it
+    /// so the two never drift; a tab with no entry (older saves) is at 1.0.
+    static var tabZooms: [Double] {
+        get { d.array(forKey: Key.tabZooms) as? [Double] ?? [] }
+        set { d.set(newValue, forKey: Key.tabZooms) }
     }
 
     /// One-time move off the old quick-switch slots, run at launch.

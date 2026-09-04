@@ -75,12 +75,18 @@ final class BrowserViewController: NSViewController {
     // MARK: - Restoring
 
     func restoreTabs() {
-        let saved = Prefs.tabs.filter { !$0.isEmpty }
+        // Pair each URL with its zoom *before* dropping empties, so the two lists
+        // stay aligned. Zooms may be shorter than tabs (saves from before zoom
+        // was remembered); anything missing is 1.0.
+        let zooms = Prefs.tabZooms
+        let saved = Prefs.tabs.enumerated()
+            .map { (url: $0.element, zoom: $0.offset < zooms.count ? zooms[$0.offset] : 1.0) }
+            .filter { !$0.url.isEmpty }
         guard !saved.isEmpty else {
             presentSetup(mode: .firstRun)
             return
         }
-        tabs = saved.map { makeTab(url: $0) }
+        tabs = saved.map { makeTab(url: $0.url, zoom: $0.zoom) }
         activeIndex = min(max(Prefs.activeTab, 0), tabs.count - 1)
         // Nothing has been used yet this session, so seed recency with the
         // restored tab up front and bar order behind it.
@@ -90,8 +96,8 @@ final class BrowserViewController: NSViewController {
         refresh()
     }
 
-    private func makeTab(url: String?) -> Tab {
-        let tab = Tab(url: url)
+    private func makeTab(url: String?, zoom: Double = 1.0) -> Tab {
+        let tab = Tab(url: url, zoom: zoom)
         tab.onChange = { [weak self] in self?.refresh() }
         tab.webView.uiDelegate = self
         return tab
@@ -194,7 +200,10 @@ final class BrowserViewController: NSViewController {
     }
 
     private func persist() {
-        Prefs.tabs = tabs.map(\.urlString).filter { !$0.isEmpty }
+        // Filter as pairs so a tab with no URL yet drops out of both lists.
+        let live = tabs.filter { !$0.urlString.isEmpty }
+        Prefs.tabs = live.map(\.urlString)
+        Prefs.tabZooms = live.map(\.zoom)
         Prefs.activeTab = activeIndex
         Prefs.lastURL = currentURLString
     }
@@ -212,17 +221,24 @@ final class BrowserViewController: NSViewController {
     func goBack() { activeTab?.webView.goBack() }
     func goForward() { activeTab?.webView.goForward() }
 
-    func zoomIn() {
-        guard let webView = activeTab?.webView else { return }
-        webView.pageZoom = min(webView.pageZoom + 0.1, 3.0)
+    // Zoom belongs to the tab and is saved as soon as it changes, so a relaunch
+    // brings every tab back at the size you left it.
+    func zoomIn() { adjustZoom(by: Tab.zoomStep) }
+    func zoomOut() { adjustZoom(by: -Tab.zoomStep) }
+    func zoomReset() { setZoom(1.0) }
+
+    private func adjustZoom(by delta: Double) {
+        guard let tab = activeTab else { return }
+        // Snap to the step grid, or repeated ⌘- accumulates float error and
+        // saves 0.30000000000000004 instead of 0.3.
+        setZoom(((tab.zoom + delta) * 10).rounded() / 10)
     }
 
-    func zoomOut() {
-        guard let webView = activeTab?.webView else { return }
-        webView.pageZoom = max(webView.pageZoom - 0.1, 0.4)
+    private func setZoom(_ value: Double) {
+        guard let tab = activeTab else { return }
+        tab.zoom = value
+        persist()
     }
-
-    func zoomReset() { activeTab?.webView.pageZoom = 1.0 }
 
     // MARK: - Setup overlay
 
