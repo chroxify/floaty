@@ -365,9 +365,12 @@ final class TabIconView: NSView {
     private let ping = CALayer()
     private let arc = CAShapeLayer()
 
+    // Every state the same size. Kanna draws its spinner at 14px and its dots
+    // at 10px; side by side in a strip that reads as two sizes of thing, so
+    // here the spinner is brought down to the dots.
     private static let dotSize: CGFloat = 10                 // size-2.5
-    private static let arcSize: CGFloat = 14                 // size-3.5
-    private static let arcWidth: CGFloat = 14 * 2 / 24        // lucide stroke 2 on a 24 box
+    private static let arcSize: CGFloat = 10
+    private static let arcWidth: CGFloat = 1.5               // lucide's 2/24 ratio, rounded up to stay crisp at 10pt
     private static let arcSweep: CGFloat = 0.875             // loader-circle: 315°
 
     override init(frame frameRect: NSRect) {
