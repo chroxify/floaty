@@ -35,11 +35,18 @@ extension AppDelegate {
             tabsMenu.addItem(.caption("No tabs open"))
         } else {
             for (i, tab) in browser.tabs.enumerated() {
-                let entry = item(tab.displayTitle,
+                // Room for the middle of the title here — "Fix the dock › Floaty"
+                // tells two Kanna chats apart where the strip can't.
+                let label = tab.displayContext.map { "\(tab.displayTitle) › \($0)" } ?? tab.displayTitle
+                let entry = item(label,
                                  #selector(selectTabFromMenu(_:)),
                                  key: i < 9 ? "\(i + 1)" : nil)
                 entry.tag = i
                 entry.state = i == browser.activeIndex ? .on : .off
+                if let color = tab.status.color {
+                    entry.image = Self.dotImage(color)
+                    entry.toolTip = tab.status.label
+                }
                 tabsMenu.addItem(entry)
             }
         }
@@ -286,6 +293,17 @@ extension AppDelegate {
         entry.target = action == #selector(NSApplication.terminate(_:)) ? nil : self
         if key != nil { entry.keyEquivalentModifierMask = modifiers }
         return entry
+    }
+
+    /// The tab's status dot, as a menu image.
+    private static func dotImage(_ color: NSColor) -> NSImage {
+        let image = NSImage(size: NSSize(width: 10, height: 10), flipped: false) { rect in
+            color.setFill()
+            NSBezierPath(ovalIn: rect.insetBy(dx: 1.5, dy: 1.5)).fill()
+            return true
+        }
+        image.isTemplate = false
+        return image
     }
 
     private func displayName(for urlString: String) -> String {

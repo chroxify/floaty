@@ -320,6 +320,7 @@ private final class SwitcherCell: NSView {
     /// box's own fill showing through the rounded corners.
     private let previewBox = NSView()
     private let iconView = NSImageView()
+    private let statusDot = StatusDot()
     private let titleLabel = NSTextField(labelWithString: "")
     private var isSelected: Bool
     private var hasSnapshot = false
@@ -368,6 +369,7 @@ private final class SwitcherCell: NSView {
 
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.imageScaling = .scaleProportionallyDown
+        statusDot.translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = Theme.font(Theme.Size.xs, .medium)
@@ -377,6 +379,7 @@ private final class SwitcherCell: NSView {
 
         addSubview(previewBox)
         addSubview(iconView)
+        addSubview(statusDot)
         addSubview(titleLabel)
 
         // One inset all the way round, and the same gap between the preview and
@@ -397,6 +400,11 @@ private final class SwitcherCell: NSView {
             iconView.widthAnchor.constraint(equalToConstant: 14),
             iconView.heightAnchor.constraint(equalToConstant: 14),
 
+            statusDot.trailingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 2),
+            statusDot.bottomAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 2),
+            statusDot.widthAnchor.constraint(equalToConstant: StatusDot.size),
+            statusDot.heightAnchor.constraint(equalToConstant: StatusDot.size),
+
             titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
             titleLabel.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
@@ -412,6 +420,7 @@ private final class SwitcherCell: NSView {
 
     func refreshPreview() {
         titleLabel.stringValue = tab.displayTitle
+        statusDot.status = tab.status
 
         if let favicon = tab.favicon {
             iconView.image = favicon

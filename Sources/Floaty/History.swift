@@ -10,10 +10,13 @@ struct HistoryEntry: Equatable {
         return host.replacingOccurrences(of: "www.", with: "")
     }
 
-    /// What the row shows as its heading — the page title, or the host when the
+    /// What the row shows as its heading — the page title with the site's name
+    /// stripped (the row shows the host on its own line), or the host when the
     /// page never gave one.
     var displayTitle: String {
-        title.trimmingCharacters(in: .whitespaces).isEmpty ? host : title
+        guard !title.trimmingCharacters(in: .whitespaces).isEmpty else { return host }
+        let cleaned = TabTitle.clean(title, url: URL(string: url))
+        return cleaned.context.map { "\(cleaned.title) › \($0)" } ?? cleaned.title
     }
 }
 

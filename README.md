@@ -119,6 +119,33 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   make that quick. For a site where cloning the page you're on is the better
   default, "New Tab Opens ▸ This Page" in the Tabs menu remembers that for the
   site.
+- **Titles are cleaned.** Page titles are written for a browser, where the tab
+  bar is the only place the site's name appears: `[2] Kanna : Floaty : Fix the
+  dock`, `Release 1.0.3 · chroxify/floaty · GitHub`. Next to a favicon the site
+  name is noise, and at ten tabs it's all you can read. The strip keeps the part
+  that's about *this* page ("Fix the dock"); the middle ("Floaty") shows in the
+  Tabs menu, which has room. Unread counters go too.
+
+  The site's name is recognised from its host, a short built-in list, and — the
+  case that matters — the title of its own root page, remembered per site.
+  That's how `localhost:3210` knows it's "Kanna". Which end the name sits at
+  says which end the page's own part is at: sites that lead with their name
+  nest general → specific, sites that end with it go the other way.
+- **A tab shows what its page is doing**, if the page says. An agent chat that's
+  working, one that stopped to ask you something, one that finished while you
+  were in another tab — a dot on the favicon, coloured by state, in the strip,
+  the switcher and the Tabs menu. "Working" breathes; nothing else moves.
+
+  The page opts in with two meta tags, nothing Floaty-specific in the values:
+
+  ```html
+  <meta name="floaty:status" content="working">   <!-- idle · working · waiting · done · failed -->
+  <meta name="floaty:badge"  content="3">         <!-- optional count -->
+  ```
+
+  Floaty reads them on load and watches the head for changes, so an app that
+  updates them as state changes gets a live dot. Kanna sets them next to its
+  title. Pages that don't have them show nothing, which is the same as before.
 - **Right-click a tab** for Reload, Duplicate, Copy Link, Open in Browser,
   Close, and Close Other Tabs. The menu shows the shortcut where one exists, so
   it doubles as the place to learn them. Right-clicking doesn't select the tab;

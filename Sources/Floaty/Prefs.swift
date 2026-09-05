@@ -14,6 +14,7 @@ enum Prefs {
         static let tabs = "tabs"
         static let siteZooms = "siteZooms"
         static let newTabRules = "newTabRules"
+        static let siteBrands = "siteBrands"
         static let activeTab = "activeTab"
         static let cycleByRecent = "cycleByRecent"
         static let dockMode = "dockMode"
@@ -103,6 +104,28 @@ enum Prefs {
         var all = siteZooms
         if abs(zoom - 1.0) < 0.001 { all.removeValue(forKey: key) } else { all[key] = zoom }
         siteZooms = all
+    }
+
+    // MARK: - Site names
+
+    /// What a site calls itself, learned from its root page's title. Lets the
+    /// title cleaner strip "Kanna" from "Kanna : Project : Chat" when the host
+    /// is just localhost and says nothing.
+    private static var siteBrands: [String: String] {
+        get { d.dictionary(forKey: Key.siteBrands) as? [String: String] ?? [:] }
+        set { d.set(newValue, forKey: Key.siteBrands) }
+    }
+
+    static func siteBrand(forSite key: String?) -> String? {
+        guard let key else { return nil }
+        return siteBrands[key]
+    }
+
+    static func rememberSiteBrand(_ brand: String, forSite key: String?) {
+        guard let key, siteBrands[key] != brand else { return }
+        var all = siteBrands
+        all[key] = brand
+        siteBrands = all
     }
 
     // MARK: - New tab

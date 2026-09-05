@@ -100,6 +100,7 @@ final class TabBarView: NSView {
             let item = TabItemView(
                 title: tab.displayTitle,
                 favicon: tab.favicon,
+                status: tab.status,
                 isActive: index == activeIndex,
                 // A lone tab has no close affordance — closing it would leave nothing.
                 canClose: tabs.count > 1
@@ -166,6 +167,7 @@ final class TabItemView: NSView {
     var menuProvider: (() -> NSMenu?)?
 
     private let iconView = NSImageView()
+    private let statusDot = StatusDot()
     private let titleLabel = NSTextField(labelWithString: "")
     private let closeButton = NSButton()
     private let isActive: Bool
@@ -174,16 +176,16 @@ final class TabItemView: NSView {
     private var didDrag = false
     private var downLocation: NSPoint?
 
-    init(title: String, favicon: NSImage?, isActive: Bool, canClose: Bool) {
+    init(title: String, favicon: NSImage?, status: PageStatus, isActive: Bool, canClose: Bool) {
         self.isActive = isActive
         self.canClose = canClose
         super.init(frame: .zero)
-        build(title: title, favicon: favicon)
+        build(title: title, favicon: favicon, status: status)
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private func build(title: String, favicon: NSImage?) {
+    private func build(title: String, favicon: NSImage?, status: PageStatus) {
         wantsLayer = true
         layer?.applySuperellipse(10) // the xs/sm control radius
 
@@ -197,6 +199,13 @@ final class TabItemView: NSView {
             iconView.contentTintColor = Theme.Color.fg2
         }
         addSubview(iconView)
+
+        // On the favicon's corner, the way presence badges sit on avatars: it
+        // reads as "this tab's state" without taking a slot of its own.
+        statusDot.translatesAutoresizingMaskIntoConstraints = false
+        statusDot.status = status
+        statusDot.toolTip = status.label
+        addSubview(statusDot)
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = Theme.font(Theme.Size.xs, .medium)
@@ -222,6 +231,11 @@ final class TabItemView: NSView {
             iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
             iconView.widthAnchor.constraint(equalToConstant: 14),
             iconView.heightAnchor.constraint(equalToConstant: 14),
+
+            statusDot.trailingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 2),
+            statusDot.bottomAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 2),
+            statusDot.widthAnchor.constraint(equalToConstant: StatusDot.size),
+            statusDot.heightAnchor.constraint(equalToConstant: StatusDot.size),
 
             titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -320,4 +334,55 @@ final class TabItemView: NSView {
     override func menu(for event: NSEvent) -> NSMenu? { menuProvider?() }
 
     @objc private func close() { onClose?() }
+}
+
+/// A page-status badge: a filled dot with a ring in the surface colour so it
+/// separates from the favicon under it. Hidden for idle. "Working" breathes —
+/// the one place motion earns its keep, because the state itself is ongoing.
+final class StatusDot: NSView {
+
+    static let size: CGFloat = 8
+
+    var status: PageStatus = .idle {
+        didSet { apply() }
+    }
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        layer?.cornerRadius = Self.size / 2
+        layer?.borderWidth = 1.5
+        apply()
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        apply()
+    }
+
+    private func apply() {
+        guard let color = status.color else {
+            isHidden = true
+            layer?.removeAllAnimations()
+            return
+        }
+        isHidden = false
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            layer?.backgroundColor = color.cgColor
+            layer?.borderColor = NSColor.windowBackgroundColor.cgColor
+        }
+        layer?.removeAllAnimations()
+        if status == .working {
+            let pulse = CABasicAnimation(keyPath: "opacity")
+            pulse.fromValue = 1.0
+            pulse.toValue = 0.35
+            pulse.duration = 0.9
+            pulse.autoreverses = true
+            pulse.repeatCount = .infinity
+            pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            layer?.add(pulse, forKey: "pulse")
+        }
+    }
 }

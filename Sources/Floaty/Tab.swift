@@ -1,6 +1,162 @@
 import AppKit
 import WebKit
 
+/// Page titles are written for a browser, where the tab bar is the only place
+/// the site's name appears: "[2] Kanna : Floaty : Fix the dock jump",
+/// "Release 1.0.3 · chroxify/floaty · GitHub". Next to a favicon the site name
+/// is noise, and at ten tabs it's the only thing you can read. This keeps the
+/// part that's about *this* page — "Fix the dock jump" — and hands the middle
+/// ("Floaty") to whoever has room for it.
+enum TabTitle {
+    struct Cleaned {
+        let title: String
+        let context: String?
+    }
+
+    static func clean(_ raw: String, url: URL?) -> Cleaned {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let siteKey = Prefs.siteKey(for: url)
+
+        // Unread counters: "[2] Kanna", "(3) Slack", "3 • Inbox".
+        text = text.replacing(counter, with: "")
+
+        let brands = brandSet(url: url, siteKey: siteKey)
+        func isBrand(_ s: String) -> Bool { brands.contains(normalize(s)) }
+
+        // "ChatGPT: Chat, Work, Create" — a brand prefix with no space before the
+        // colon, so the segment split below wouldn't catch it. (With a space
+        // before the colon it's an ordinary separator and the split handles it.)
+        var brandFirst = false
+        if let m = brandColon.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+           let head = Range(m.range(at: 1), in: text), let tail = Range(m.range(at: 2), in: text),
+           isBrand(String(text[head])) {
+            text = String(text[tail])
+            brandFirst = true
+        }
+
+        // A dangling separator — "Kanna : Floaty :" when there's no chat yet —
+        // has nothing after it for the split to see.
+        text = text.replacing(edgeSeparator, with: "")
+
+        let segments = text
+            .components(separatedBy: separator)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        guard !segments.isEmpty else {
+            return Cleaned(title: url?.host ?? raw, context: nil)
+        }
+
+        if isBrand(segments[0]) { brandFirst = true }
+        let kept = segments.filter { !isBrand($0) }
+
+        // Nothing but the site's name: that *is* the title, keep it as written.
+        guard !kept.isEmpty else { return Cleaned(title: segments[0], context: nil) }
+        guard kept.count > 1 else { return Cleaned(title: kept[0], context: nil) }
+
+        // Sites that lead with their name nest general → specific ("Kanna :
+        // Project : Chat"); sites that end with it go specific → general
+        // ("Release · repo · GitHub"). Either way the page's own part is at the
+        // far end from the brand.
+        let title = brandFirst ? kept.last! : kept.first!
+        let rest = brandFirst ? kept.dropLast() : kept.dropFirst()
+        return Cleaned(title: title, context: rest.joined(separator: " › "))
+    }
+
+    /// The names a site goes by: its host labels, the name it gave its own root
+    /// page (learned — that's how localhost:3210 knows it's "Kanna"), and a few
+    /// that don't match their host.
+    private static func brandSet(url: URL?, siteKey: String?) -> Set<String> {
+        var brands: Set<String> = [
+            "kanna", "chatgpt", "openai", "claude", "anthropic", "gemini", "google", "googlesearch",
+            "googledocs", "perplexity", "grok", "mistral", "copilot", "deepseek",
+            "notion", "github", "slack", "linear", "figma", "youtube", "reddit", "discord",
+        ]
+        if let host = url?.host?.lowercased() {
+            for label in host.split(separator: ".") where label != "www" && label.count > 2 {
+                brands.insert(normalize(String(label)))
+            }
+        }
+        if let learned = Prefs.siteBrand(forSite: siteKey) { brands.insert(normalize(learned)) }
+        return brands
+    }
+
+    /// A root page's title is usually just the site's name. Remember it, so the
+    /// name can be recognised on every other page of that site.
+    static func learnBrand(title: String, url: URL?) {
+        guard let url, url.path.isEmpty || url.path == "/" else { return }
+        let text = title.trimmingCharacters(in: .whitespacesAndNewlines).replacing(counter, with: "")
+        guard !text.isEmpty, text.count <= 24,
+              text.components(separatedBy: separator).count == 1,
+              text.split(separator: " ").count <= 3 else { return }
+        Prefs.rememberSiteBrand(text, forSite: Prefs.siteKey(for: url))
+    }
+
+    private static func normalize(_ s: String) -> String {
+        s.lowercased().filter { $0.isLetter || $0.isNumber }
+    }
+
+    private static let counter = try! NSRegularExpression(
+        pattern: #"^\s*(?:[\[\(]\d+[\]\)]|\d+\s*[•·|\-–—])\s*"#)
+    private static let brandColon = try! NSRegularExpression(pattern: #"^(\S[^:]{0,28}\S):\s+(.+)$"#)
+    private static let separator = try! NSRegularExpression(pattern: #"\s+(?:::|:|\||·|•|-|–|—|»|›)\s+"#)
+    private static let edgeSeparator = try! NSRegularExpression(pattern: #"^\s*[:|·•\-–—»›]+\s*|\s*[:|·•\-–—»›]+\s*$"#)
+}
+
+private extension String {
+    func replacing(_ regex: NSRegularExpression, with template: String) -> String {
+        regex.stringByReplacingMatches(in: self, range: NSRange(startIndex..., in: self), withTemplate: template)
+    }
+
+    func components(separatedBy regex: NSRegularExpression) -> [String] {
+        var parts: [String] = []
+        var last = startIndex
+        for m in regex.matches(in: self, range: NSRange(startIndex..., in: self)) {
+            guard let r = Range(m.range, in: self) else { continue }
+            parts.append(String(self[last..<r.lowerBound]))
+            last = r.upperBound
+        }
+        parts.append(String(self[last...]))
+        return parts
+    }
+}
+
+/// What a page says it's doing, for apps that have something to say — an agent
+/// chat is working, or stopped to ask you something, or finished while you were
+/// elsewhere. Read from `<meta name="floaty:status">`; see the README.
+enum PageStatus: String {
+    case idle, working, waiting, done, failed
+
+    var color: NSColor? {
+        switch self {
+        case .idle: return nil
+        case .working: return .secondaryLabelColor
+        case .waiting: return .controlAccentColor
+        case .done: return .systemGreen
+        case .failed: return .systemRed
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .idle: return ""
+        case .working: return "Working"
+        case .waiting: return "Waiting for you"
+        case .done: return "Done"
+        case .failed: return "Failed"
+        }
+    }
+}
+
+/// Hands script messages to the tab without the content controller retaining
+/// it — WebKit holds handlers strongly, so a tab as its own handler never dies.
+private final class StatusRelay: NSObject, WKScriptMessageHandler {
+    weak var tab: Tab?
+    func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        tab?.receiveStatus(message.body)
+    }
+}
+
 /// One page. Each tab keeps its own live web view, so switching is instant and
 /// scroll position, forms and playback survive.
 final class Tab: NSObject {
@@ -8,6 +164,11 @@ final class Tab: NSObject {
     let id = UUID()
     private(set) var webView = Tab.makeWebView()
     private(set) var favicon: NSImage?
+    /// What the page reports it's doing. Idle for pages that don't say.
+    private(set) var status: PageStatus = .idle
+    /// A count the page wants shown — unread chats, say. Zero when it doesn't.
+    private(set) var badge = 0
+    private let statusRelay = StatusRelay()
     /// Last frame of the page, for the switcher. Captured on the way out of a
     /// tab, while the view is still on screen and has something to give.
     private(set) var snapshot: NSImage?
@@ -19,16 +180,23 @@ final class Tab: NSObject {
     private var faviconTask: URLSessionDataTask?
     private var faviconHost: String?
 
-    /// What the bar shows: the page title, falling back to the host, so a tab is
+    /// What the bar shows: the page title with the site's own name and any unread
+    /// counter stripped (see `TabTitle`), falling back to the host, so a tab is
     /// never blank while it loads.
-    var displayTitle: String {
+    var displayTitle: String { cleanedTitle.title }
+
+    /// The middle of a nested title — the project a chat belongs to, the repo a
+    /// release is in — for places with room for a second line.
+    var displayContext: String? { cleanedTitle.context }
+
+    private var cleanedTitle: TabTitle.Cleaned {
         if let title = webView.title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
-            return title
+            return TabTitle.clean(title, url: webView.url)
         }
         if let host = webView.url?.host {
-            return host.replacingOccurrences(of: "www.", with: "")
+            return .init(title: host.replacingOccurrences(of: "www.", with: ""), context: nil)
         }
-        return "New Tab"
+        return .init(title: "New Tab", context: nil)
     }
 
     var urlString: String { webView.url?.absoluteString ?? "" }
@@ -54,8 +222,21 @@ final class Tab: NSObject {
         zoom = 1.0
         super.init()
         webView.navigationDelegate = self
+        statusRelay.tab = self
+        webView.configuration.userContentController.add(statusRelay, name: "floatyStatus")
         observe()
         if let url { load(url) }
+    }
+
+    /// `{status, badge}` from the page's meta tags, or nulls when it has none.
+    fileprivate func receiveStatus(_ body: Any) {
+        let dict = body as? [String: Any] ?? [:]
+        let newStatus = (dict["status"] as? String).flatMap(PageStatus.init(rawValue:)) ?? .idle
+        let newBadge = (dict["badge"] as? String).flatMap(Int.init) ?? (dict["badge"] as? Int) ?? 0
+        guard newStatus != status || newBadge != badge else { return }
+        status = newStatus
+        badge = newBadge
+        onChange?()
     }
 
     /// Adopt the zoom for wherever the tab is now. Called before a load starts
@@ -86,7 +267,10 @@ final class Tab: NSObject {
 
     private func observe() {
         observations = [
-            webView.observe(\.title) { [weak self] _, _ in self?.onChange?() },
+            webView.observe(\.title) { [weak self] wv, _ in
+                if let title = wv.title { TabTitle.learnBrand(title: title, url: wv.url) }
+                self?.onChange?()
+            },
             webView.observe(\.isLoading) { [weak self] _, _ in self?.onChange?() },
             webView.observe(\.url) { [weak self] wv, _ in
                 guard let self else { return }
@@ -359,6 +543,7 @@ final class Tab: NSObject {
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.addUserScript(pageChromeScript)
+        config.userContentController.addUserScript(statusScript)
 
         let webView = PageWebView(frame: .zero, configuration: config)
         webView.translatesAutoresizingMaskIntoConstraints = false
@@ -379,6 +564,35 @@ final class Tab: NSObject {
     /// Cursors get the native treatment: the arrow everywhere, the I-beam over
     /// text. The web's pointing hand doesn't exist in AppKit, and it's the single
     /// biggest tell that a window is a browser rather than an app.
+    /// Reports `<meta name="floaty:status">` and `floaty:badge` to the tab —
+    /// once on load, and again whenever the head changes. Posts nulls for a page
+    /// that has neither, so navigating away from a page that had them clears
+    /// the dot rather than leaving it stuck.
+    private static let statusScript = WKUserScript(
+        source: """
+        (function () {
+          var last = '';
+          function read(name) {
+            var m = document.head && document.head.querySelector('meta[name="' + name + '"]');
+            return m ? m.getAttribute('content') : null;
+          }
+          function post() {
+            var s = read('floaty:status'), b = read('floaty:badge');
+            var key = s + '|' + b;
+            if (key === last) return;
+            last = key;
+            try { window.webkit.messageHandlers.floatyStatus.postMessage({ status: s, badge: b }); } catch (e) {}
+          }
+          post();
+          if (document.head) {
+            new MutationObserver(post).observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['content'] });
+          }
+        })();
+        """,
+        injectionTime: .atDocumentEnd,
+        forMainFrameOnly: true
+    )
+
     private static let pageChromeScript = WKUserScript(
         source: """
         (function () {

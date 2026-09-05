@@ -4,3 +4,4 @@ Floaty.app/
 
 # Conversation attachments, not project files.
 .kanna/
+.playwright-mcp/
