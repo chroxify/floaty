@@ -265,8 +265,15 @@ final class BrowserViewController: NSViewController {
             webView.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         view.window?.makeFirstResponder(webView)
+        tab.refreshStatus()
 
         if Prefs.autoFocusInput { tab.focusMainInput() }
+    }
+
+    /// Every tab re-reports when the window comes back, not just the visible
+    /// one — the strip shows all of their dots.
+    func refreshStatuses() {
+        tabs.forEach { $0.refreshStatus() }
     }
 
     private func refresh() {

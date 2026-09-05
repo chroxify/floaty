@@ -139,6 +139,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         userHidden = false
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
+        browser.refreshStatuses()
     }
 
     private func hidePanel() {
@@ -157,6 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if visible {
             guard !userHidden else { return }
             panel.orderFront(nil)
+            browser.refreshStatuses()
         } else {
             panel.orderOut(nil)
         }

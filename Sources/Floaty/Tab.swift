@@ -249,6 +249,13 @@ final class Tab: NSObject {
         if let url { load(url) }
     }
 
+    /// Ask the page to report its status again now — on coming into view, so
+    /// whatever happened while the tab was in the background is caught up
+    /// before you can notice it wasn't.
+    func refreshStatus() {
+        webView.evaluateJavaScript("window.__floatyStatus && window.__floatyStatus(true)") { _, _ in }
+    }
+
     /// `{status, badge}` from the page's meta tags, or nulls when it has none.
     fileprivate func receiveStatus(_ body: Any) {
         let dict = body as? [String: Any] ?? [:]
@@ -587,9 +594,12 @@ final class Tab: NSObject {
     /// text. The web's pointing hand doesn't exist in AppKit, and it's the single
     /// biggest tell that a window is a browser rather than an app.
     /// Reports `<meta name="floaty:status">` and `floaty:badge` to the tab —
-    /// once on load, and again whenever the head changes. Posts nulls for a page
-    /// that has neither, so navigating away from a page that had them clears
-    /// the dot rather than leaving it stuck.
+    /// once on load, whenever the head changes, and every few seconds anyway.
+    /// The poll is the safety net: a background web view can be throttled, and
+    /// a dot that's a few seconds stale is fine where one that's stuck is not.
+    /// Posts nulls for a page that has neither, so navigating away from a page
+    /// that had them clears the dot. `__floatyStatus(true)` re-posts on demand,
+    /// which the tab calls when it comes into view.
     private static let statusScript = WKUserScript(
         source: """
         (function () {
@@ -598,17 +608,19 @@ final class Tab: NSObject {
             var m = document.head && document.head.querySelector('meta[name="' + name + '"]');
             return m ? m.getAttribute('content') : null;
           }
-          function post() {
+          function post(force) {
             var s = read('floaty:status'), b = read('floaty:badge');
             var key = s + '|' + b;
-            if (key === last) return;
+            if (!force && key === last) return;
             last = key;
             try { window.webkit.messageHandlers.floatyStatus.postMessage({ status: s, badge: b }); } catch (e) {}
           }
+          window.__floatyStatus = post;
           post();
           if (document.head) {
-            new MutationObserver(post).observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['content'] });
+            new MutationObserver(function () { post(); }).observe(document.head, { childList: true, subtree: true, attributes: true, attributeFilter: ['content'] });
           }
+          setInterval(function () { post(); }, 3000);
         })();
         """,
         injectionTime: .atDocumentEnd,
