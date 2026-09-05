@@ -130,7 +130,8 @@ enum PageStatus: String {
     var color: NSColor? {
         switch self {
         case .idle: return nil
-        case .working: return .secondaryLabelColor
+        // Solid colours only: a translucent dot over a favicon is unreadable.
+        case .working: return .systemGray
         case .waiting: return .controlAccentColor
         case .done: return .systemGreen
         case .failed: return .systemRed

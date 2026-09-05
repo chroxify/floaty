@@ -362,6 +362,8 @@ final class TabItemView: NSView {
 /// A page-status badge: a filled dot with a ring in the surface colour so it
 /// separates from the favicon under it. Hidden for idle. "Working" breathes —
 /// the one place motion earns its keep, because the state itself is ongoing.
+/// It breathes by size, never by opacity: the dot has to stay solid to be
+/// readable over a favicon at 8pt.
 final class StatusDot: NSView {
 
     static let size: CGFloat = 8
@@ -370,15 +372,30 @@ final class StatusDot: NSView {
         didSet { apply() }
     }
 
+    /// The dot is a sublayer rather than the view's own layer: AppKit anchors a
+    /// view's layer at its corner, so a scale animation on it would shrink the
+    /// dot towards the corner instead of breathing in place.
+    private let dot = CALayer()
+
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.cornerRadius = Self.size / 2
-        layer?.borderWidth = 1.5
+        dot.cornerRadius = Self.size / 2
+        dot.borderWidth = 1.5
+        layer?.addSublayer(dot)
         apply()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        dot.bounds = CGRect(origin: .zero, size: bounds.size)
+        dot.position = CGPoint(x: bounds.midX, y: bounds.midY)
+        CATransaction.commit()
+    }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -388,24 +405,25 @@ final class StatusDot: NSView {
     private func apply() {
         guard let color = status.color else {
             isHidden = true
-            layer?.removeAllAnimations()
+            dot.removeAllAnimations()
             return
         }
         isHidden = false
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = color.cgColor
-            layer?.borderColor = NSColor.windowBackgroundColor.cgColor
+            dot.backgroundColor = color.cgColor
+            dot.borderColor = NSColor.windowBackgroundColor.cgColor
         }
-        layer?.removeAllAnimations()
+        dot.removeAllAnimations()
+        dot.opacity = 1
         if status == .working {
-            let pulse = CABasicAnimation(keyPath: "opacity")
+            let pulse = CABasicAnimation(keyPath: "transform.scale")
             pulse.fromValue = 1.0
-            pulse.toValue = 0.35
+            pulse.toValue = 0.7
             pulse.duration = 0.9
             pulse.autoreverses = true
             pulse.repeatCount = .infinity
             pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            layer?.add(pulse, forKey: "pulse")
+            dot.add(pulse, forKey: "pulse")
         }
     }
 }
