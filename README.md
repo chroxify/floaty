@@ -134,9 +134,10 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
 - **A tab shows what its page is doing**, if the page says. An agent chat that's
   working, one that stopped to ask you something, one that finished while you
   were in another tab — a dot on the favicon, coloured by state, in the strip,
-  the switcher and the Tabs menu. "Working" breathes by size; nothing else
-  moves, and nothing is ever translucent — an 8pt dot over a favicon has to be
-  solid to be readable.
+  the switcher and the Tabs menu. Nothing moves and nothing is translucent — an
+  8pt dot over a favicon has to be solid to be readable, and a pulse for
+  "working" was tried at two strengths and both pulled the eye to a tab you
+  weren't in. Colour carries the whole meaning.
 
   The page opts in with two meta tags, nothing Floaty-specific in the values:
 
