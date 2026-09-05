@@ -45,9 +45,32 @@ extension AppDelegate {
         }
         tabsMenu.addItem(.separator())
         tabsMenu.addItem(item("New Tab", #selector(newTab), key: "t"))
+        tabsMenu.addItem(item("Open in New Tab…", #selector(newTabAnywhere),
+                              key: "t", modifiers: [.command, .shift]))
         let closeTab = item("Close Tab", #selector(closeTabFromMenu), key: "w")
         closeTab.isEnabled = browser.tabs.count > 1
         tabsMenu.addItem(closeTab)
+
+        // Per site: ⌘T lands on the site's fresh-start page by default, which is
+        // a new chat on a chat app. For a site where you'd rather clone the page
+        // you're on, flip it here; it's remembered for that site only.
+        if let tab = browser.activeTab, let key = tab.siteKey {
+            tabsMenu.addItem(.separator())
+            let ruleItem = NSMenuItem(title: "New Tab Opens", action: nil, keyEquivalent: "")
+            let ruleMenu = NSMenu()
+            ruleMenu.autoenablesItems = false
+            let current = Prefs.newTabRule(forSite: key)
+            for (label, rule) in [("Site Home", Prefs.NewTabRule.root), ("This Page", .page)] {
+                let entry = item(label, #selector(setNewTabRule(_:)))
+                entry.representedObject = rule.rawValue
+                entry.state = current == rule ? .on : .off
+                ruleMenu.addItem(entry)
+            }
+            ruleMenu.addItem(.separator())
+            ruleMenu.addItem(.caption("For \(key)"))
+            ruleItem.submenu = ruleMenu
+            tabsMenu.addItem(ruleItem)
+        }
         tabsItem.submenu = tabsMenu
         menu.addItem(tabsItem)
 

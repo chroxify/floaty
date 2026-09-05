@@ -13,6 +13,7 @@ enum Prefs {
         static let allSpaces = "allSpaces"
         static let tabs = "tabs"
         static let siteZooms = "siteZooms"
+        static let newTabRules = "newTabRules"
         static let activeTab = "activeTab"
         static let cycleByRecent = "cycleByRecent"
         static let dockMode = "dockMode"
@@ -102,6 +103,33 @@ enum Prefs {
         var all = siteZooms
         if abs(zoom - 1.0) < 0.001 { all.removeValue(forKey: key) } else { all[key] = zoom }
         siteZooms = all
+    }
+
+    // MARK: - New tab
+
+    /// What ⌘T opens on a site: its fresh-start page (the default — a new chat
+    /// on a chat app) or a copy of the page you're on.
+    enum NewTabRule: String {
+        case root, page
+    }
+
+    private static var newTabRules: [String: String] {
+        get { d.dictionary(forKey: Key.newTabRules) as? [String: String] ?? [:] }
+        set { d.set(newValue, forKey: Key.newTabRules) }
+    }
+
+    static func newTabRule(forSite key: String?) -> NewTabRule {
+        guard let key, let raw = newTabRules[key] else { return .root }
+        return NewTabRule(rawValue: raw) ?? .root
+    }
+
+    /// Only overrides are stored, so the default can change for everyone who
+    /// never touched it.
+    static func setNewTabRule(_ rule: NewTabRule, forSite key: String?) {
+        guard let key else { return }
+        var all = newTabRules
+        if rule == .root { all.removeValue(forKey: key) } else { all[key] = rule.rawValue }
+        newTabRules = all
     }
 
     /// One-time move off the old quick-switch slots, run at launch.
