@@ -133,14 +133,19 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   nest general → specific, sites that end with it go the other way.
 - **A tab shows what its page is doing**, if the page says. An agent chat that's
   working, one that stopped to ask you something, one that finished while you
-  were in another tab — a dot on the favicon, coloured by state, in the strip,
-  the switcher and the Tabs menu. Nothing moves and nothing is translucent — an
-  8pt dot over a favicon has to be solid to be readable, and a pulse for
-  "working" was tried at two strengths and both pulled the eye to a tab you
-  weren't in. Colour carries the whole meaning: amber working, blue waiting for
-  you, green done, red failed. Blue and green match Kanna's own sidebar, so the
-  dot says the same thing in both places; amber is what CI uses for "in
-  progress", after grey was tried for it and read as asleep.
+  were in another tab. The state **takes the favicon's slot** rather than
+  sitting on its corner: a spinner while working, a solid dot for the rest —
+  blue waiting for you, green done, red failed. A state matters more than a
+  logo, so it gets the whole 14pt, and the favicon comes back when there's
+  nothing to say. Blue and green match Kanna's own sidebar, so the dot means
+  the same thing in both places. The same treatment in the switcher; the Tabs
+  menu gets a coloured dot beside the title.
+
+  The spinner is the one animation in the strip. A corner dot was tried first,
+  with a pulse for "working" at two strengths, and later still: an 8pt dot
+  over a favicon is hard to read at all, and a pulse pulls the eye to a tab
+  you weren't in. A spinner isn't asking for attention — it's showing work,
+  and it's the motion Kanna itself draws for a running chat.
 
   The page opts in with two meta tags, nothing Floaty-specific in the values:
 

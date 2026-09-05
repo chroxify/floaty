@@ -170,8 +170,7 @@ final class TabItemView: NSView {
     /// Built on demand, so it reflects the tab set at the moment of the click.
     var menuProvider: (() -> NSMenu?)?
 
-    private let iconView = NSImageView()
-    private let statusDot = StatusDot()
+    private let icon = TabIconView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let closeButton = NSButton()
     private let isActive: Bool
@@ -212,23 +211,10 @@ final class TabItemView: NSView {
         wantsLayer = true
         layer?.applySuperellipse(10) // the xs/sm control radius
 
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.imageScaling = .scaleProportionallyDown
-        if let favicon {
-            iconView.image = favicon
-        } else {
-            iconView.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))
-            iconView.contentTintColor = Theme.Color.fg2
-        }
-        addSubview(iconView)
-
-        // On the favicon's corner, the way presence badges sit on avatars: it
-        // reads as "this tab's state" without taking a slot of its own.
-        statusDot.translatesAutoresizingMaskIntoConstraints = false
-        statusDot.status = status
-        statusDot.toolTip = status.label
-        addSubview(statusDot)
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.favicon = favicon
+        icon.status = status
+        addSubview(icon)
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = Theme.font(Theme.Size.xs, .medium)
@@ -250,17 +236,12 @@ final class TabItemView: NSView {
         addSubview(closeButton)
 
         NSLayoutConstraint.activate([
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
-            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
-            iconView.widthAnchor.constraint(equalToConstant: 14),
-            iconView.heightAnchor.constraint(equalToConstant: 14),
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            icon.centerYAnchor.constraint(equalTo: centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: TabIconView.size),
+            icon.heightAnchor.constraint(equalToConstant: TabIconView.size),
 
-            statusDot.trailingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 2),
-            statusDot.bottomAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 2),
-            statusDot.widthAnchor.constraint(equalToConstant: StatusDot.size),
-            statusDot.heightAnchor.constraint(equalToConstant: StatusDot.size),
-
-            titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
+            titleLabel.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -22),
 
@@ -359,27 +340,72 @@ final class TabItemView: NSView {
     @objc private func close() { onClose?() }
 }
 
-/// A page-status badge: a solid dot with a ring in the surface colour so it
-/// separates from the favicon under it. Hidden for idle. Colour carries the
-/// whole meaning — a pulse for "working" was tried at two strengths and both
-/// pulled the eye to a tab you weren't in; a still grey dot says it just as well.
-final class StatusDot: NSView {
+/// The 14pt slot at the front of a tab. Shows the favicon — until the page has
+/// something to say, when the status takes the slot over entirely: a spinner
+/// while it's working, a solid dot for waiting / done / failed. The favicon is
+/// what a tab looks like at rest; a state is more important than a logo, so it
+/// gets the whole slot rather than a corner of it.
+///
+/// The spinner is the one animation in the strip. It's the same motion Kanna
+/// draws in its own sidebar for a running chat, and unlike a pulse it isn't
+/// asking for attention — it's showing work.
+final class TabIconView: NSView {
 
-    static let size: CGFloat = 8
+    static let size: CGFloat = 14
 
-    var status: PageStatus = .idle {
-        didSet { apply() }
-    }
+    var favicon: NSImage? { didSet { apply() } }
+    var status: PageStatus = .idle { didSet { apply() } }
+
+    private let imageView = NSImageView()
+    private let dot = CALayer()
+    private let arc = CAShapeLayer()
+
+    private static let dotSize: CGFloat = 9
+    private static let arcSize: CGFloat = 12
+    private static let arcWidth: CGFloat = 1.75
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         wantsLayer = true
-        layer?.cornerRadius = Self.size / 2
-        layer?.borderWidth = 1.5
+
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.imageScaling = .scaleProportionallyDown
+        addSubview(imageView)
+        NSLayoutConstraint.activate([
+            imageView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            imageView.topAnchor.constraint(equalTo: topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+
+        dot.cornerRadius = Self.dotSize / 2
+        dot.bounds = CGRect(x: 0, y: 0, width: Self.dotSize, height: Self.dotSize)
+        layer?.addSublayer(dot)
+
+        // Three quarters of a ring, round-capped, spun about its centre.
+        arc.bounds = CGRect(x: 0, y: 0, width: Self.arcSize, height: Self.arcSize)
+        arc.path = CGPath(ellipseIn: arc.bounds.insetBy(dx: Self.arcWidth / 2, dy: Self.arcWidth / 2), transform: nil)
+        arc.fillColor = nil
+        arc.lineWidth = Self.arcWidth
+        arc.lineCap = .round
+        arc.strokeStart = 0
+        arc.strokeEnd = 0.72
+        layer?.addSublayer(arc)
+
         apply()
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        let centre = CGPoint(x: bounds.midX, y: bounds.midY)
+        dot.position = centre
+        arc.position = centre
+        CATransaction.commit()
+    }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -387,14 +413,46 @@ final class StatusDot: NSView {
     }
 
     private func apply() {
+        toolTip = status.label.isEmpty ? nil : status.label
+
         guard let color = status.color else {
-            isHidden = true
+            imageView.isHidden = false
+            dot.isHidden = true
+            arc.isHidden = true
+            arc.removeAllAnimations()
+            if let favicon {
+                imageView.image = favicon
+                imageView.contentTintColor = nil
+            } else {
+                imageView.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)?
+                    .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))
+                imageView.contentTintColor = Theme.Color.fg2
+            }
             return
         }
-        isHidden = false
+
+        imageView.isHidden = true
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            layer?.backgroundColor = color.cgColor
-            layer?.borderColor = NSColor.windowBackgroundColor.cgColor
+            dot.backgroundColor = color.cgColor
+            arc.strokeColor = color.cgColor
+        }
+
+        if status == .working {
+            dot.isHidden = true
+            arc.isHidden = false
+            if arc.animation(forKey: "spin") == nil {
+                let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+                spin.fromValue = 0
+                spin.toValue = -2 * Double.pi
+                spin.duration = 0.9
+                spin.repeatCount = .infinity
+                spin.timingFunction = CAMediaTimingFunction(name: .linear)
+                arc.add(spin, forKey: "spin")
+            }
+        } else {
+            arc.isHidden = true
+            arc.removeAllAnimations()
+            dot.isHidden = false
         }
     }
 }

@@ -319,8 +319,7 @@ private final class SwitcherCell: NSView {
     /// plus real clipping, where the image view letterboxed the page and left the
     /// box's own fill showing through the rounded corners.
     private let previewBox = NSView()
-    private let iconView = NSImageView()
-    private let statusDot = StatusDot()
+    private let icon = TabIconView()
     private let titleLabel = NSTextField(labelWithString: "")
     private var isSelected: Bool
     private var hasSnapshot = false
@@ -367,9 +366,7 @@ private final class SwitcherCell: NSView {
         previewBox.layer?.applySuperellipse(Self.previewRadius)
         previewBox.layer?.borderWidth = 1
 
-        iconView.translatesAutoresizingMaskIntoConstraints = false
-        iconView.imageScaling = .scaleProportionallyDown
-        statusDot.translatesAutoresizingMaskIntoConstraints = false
+        icon.translatesAutoresizingMaskIntoConstraints = false
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = Theme.font(Theme.Size.xs, .medium)
@@ -378,8 +375,7 @@ private final class SwitcherCell: NSView {
         titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         addSubview(previewBox)
-        addSubview(iconView)
-        addSubview(statusDot)
+        addSubview(icon)
         addSubview(titleLabel)
 
         // One inset all the way round, and the same gap between the preview and
@@ -394,20 +390,15 @@ private final class SwitcherCell: NSView {
             previewBox.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
             previewBox.heightAnchor.constraint(equalToConstant: 104),
 
-            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
-            iconView.topAnchor.constraint(equalTo: previewBox.bottomAnchor, constant: inset),
-            iconView.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
-            iconView.widthAnchor.constraint(equalToConstant: 14),
-            iconView.heightAnchor.constraint(equalToConstant: 14),
+            icon.leadingAnchor.constraint(equalTo: leadingAnchor, constant: inset),
+            icon.topAnchor.constraint(equalTo: previewBox.bottomAnchor, constant: inset),
+            icon.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -inset),
+            icon.widthAnchor.constraint(equalToConstant: TabIconView.size),
+            icon.heightAnchor.constraint(equalToConstant: TabIconView.size),
 
-            statusDot.trailingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 2),
-            statusDot.bottomAnchor.constraint(equalTo: iconView.bottomAnchor, constant: 2),
-            statusDot.widthAnchor.constraint(equalToConstant: StatusDot.size),
-            statusDot.heightAnchor.constraint(equalToConstant: StatusDot.size),
-
-            titleLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 6),
+            titleLabel.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -inset),
-            titleLabel.centerYAnchor.constraint(equalTo: iconView.centerYAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: icon.centerYAnchor),
         ])
 
         refreshPreview()
@@ -420,16 +411,8 @@ private final class SwitcherCell: NSView {
 
     func refreshPreview() {
         titleLabel.stringValue = tab.displayTitle
-        statusDot.status = tab.status
-
-        if let favicon = tab.favicon {
-            iconView.image = favicon
-            iconView.contentTintColor = nil
-        } else {
-            iconView.image = NSImage(systemSymbolName: "globe", accessibilityDescription: nil)?
-                .withSymbolConfiguration(.init(pointSize: 11, weight: .regular))
-            iconView.contentTintColor = Theme.Color.fg2
-        }
+        icon.favicon = tab.favicon
+        icon.status = tab.status
 
         // A tab restored at launch but never opened has no preview yet. Its own
         // mark, centred on the empty surface, reads as deliberate.
