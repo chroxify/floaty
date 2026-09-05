@@ -137,7 +137,10 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   the switcher and the Tabs menu. Nothing moves and nothing is translucent — an
   8pt dot over a favicon has to be solid to be readable, and a pulse for
   "working" was tried at two strengths and both pulled the eye to a tab you
-  weren't in. Colour carries the whole meaning.
+  weren't in. Colour carries the whole meaning: amber working, blue waiting for
+  you, green done, red failed. Blue and green match Kanna's own sidebar, so the
+  dot says the same thing in both places; amber is what CI uses for "in
+  progress", after grey was tried for it and read as asleep.
 
   The page opts in with two meta tags, nothing Floaty-specific in the values:
 

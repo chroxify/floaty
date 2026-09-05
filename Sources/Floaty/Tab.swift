@@ -127,11 +127,14 @@ private extension String {
 enum PageStatus: String {
     case idle, working, waiting, done, failed
 
+    /// Solid colours only: a translucent dot over a favicon is unreadable.
+    /// Waiting is blue and done is green to match Kanna's own sidebar, so the
+    /// dot means the same thing in both places. Working is amber — the colour
+    /// CI uses for "in progress" — after grey was tried and read as asleep.
     var color: NSColor? {
         switch self {
         case .idle: return nil
-        // Solid colours only: a translucent dot over a favicon is unreadable.
-        case .working: return .systemGray
+        case .working: return .systemOrange
         case .waiting: return .controlAccentColor
         case .done: return .systemGreen
         case .failed: return .systemRed
