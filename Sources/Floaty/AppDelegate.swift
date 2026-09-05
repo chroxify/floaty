@@ -94,7 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         panel.onTogglePin = { [weak self] in self?.togglePin() }
         panel.onOpacityChange = { [weak self] delta in self?.setOpacity(Prefs.opacity + delta) }
         panel.onEditURL = { [weak self] in self?.browser.presentSetup(mode: .editURL) }
-        panel.onNewTab = { [weak self] in self?.browser.toggleSetup(mode: .newTab) }
+        panel.onNewTab = { [weak self] in self?.browser.newTabOnCurrentSite() }
+        panel.onNewTabAnywhere = { [weak self] in self?.browser.toggleSetup(mode: .newTab) }
         panel.onSelectTab = { [weak self] index in self?.browser.select(index) }
         panel.onCycleTab = { [weak self] offset in self?.browser.selectNext(by: offset) }
         // Closing the last tab leaves the new-tab card, not an empty window, so
@@ -272,7 +273,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc func newTab() {
         showPanel()
+        browser.newTabOnCurrentSite()
+    }
+
+    @objc func newTabAnywhere() {
+        showPanel()
         browser.toggleSetup(mode: .newTab)
+    }
+
+    @objc func setNewTabRule(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let rule = Prefs.NewTabRule(rawValue: raw) else { return }
+        Prefs.setNewTabRule(rule, forSite: browser.activeTab?.siteKey)
+        rebuildMenu()
     }
 
     @objc func selectTabFromMenu(_ sender: NSMenuItem) {

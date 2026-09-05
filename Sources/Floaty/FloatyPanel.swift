@@ -12,6 +12,7 @@ final class FloatyPanel: NSPanel {
     var onOpacityChange: ((Double) -> Void)?
     var onEditURL: (() -> Void)?
     var onNewTab: (() -> Void)?
+    var onNewTabAnywhere: (() -> Void)?
     var onCloseTab: (() -> Void)?
     var onSelectTab: ((Int) -> Void)?
     var onCycleTab: ((Int) -> Void)?
@@ -141,6 +142,7 @@ final class FloatyPanel: NSPanel {
         case .toggleWindow, .swapFocus: break
         case .hide:                onHide?()
         case .newTab:              onNewTab?()
+        case .newTabAnywhere:      onNewTabAnywhere?()
         case .closeTab:            onCloseTab?()
         case .openPage:            onEditURL?()
         case .copyLink:            onCopyURL?()

@@ -123,6 +123,22 @@ final class BrowserViewController: NSViewController {
 
     // MARK: - Tabs
 
+    /// ⌘T. A new tab on the site you're on — for a chat app, a new chat — placed
+    /// next to the current one. Falls back to the card when there's nothing to
+    /// be "on"; and if the card is already up, ⌘T puts it away, as before.
+    func newTabOnCurrentSite() {
+        if setup != nil {
+            if tabs.isEmpty { setup?.focus() } else { dismissSetup() }
+            return
+        }
+        guard let tab = activeTab, let current = tab.webView.url, current.host != nil else {
+            presentSetup(mode: .newTab)
+            return
+        }
+        let target = NewTabTarget.url(from: current, rule: Prefs.newTabRule(forSite: tab.siteKey))
+        newTab(url: target.absoluteString, at: activeIndex + 1)
+    }
+
     /// Opens and switches to a new tab, at the end unless told where.
     func newTab(url: String, at position: Int? = nil) {
         let tab = makeTab(url: url)

@@ -48,8 +48,9 @@ with install notes. Every push to `main` gets a build check too.
 On first launch it asks for a link, once. After that, **⌃Space** from anywhere
 summons the page and **⌃Space** (or **esc**) sends it away.
 
-**⌘T** opens another tab, **⌘L** points the current one somewhere else, and
-**⌘1**…**⌘9** jumps between them. Everything else — always-on-top, Spaces,
+**⌘T** opens a new tab on the site you're on — on a chat app, that's a new
+chat. **⇧⌘T** opens a tab anywhere, **⌘L** points the current one somewhere
+else, and **⌘1**…**⌘9** jumps between them. Everything else — always-on-top, Spaces,
 size, opacity, tabs, launch at login, rebinding the global shortcut —
 lives behind the menubar icon.
 
@@ -69,7 +70,8 @@ lives behind the menubar icon.
 | Always on top | `⌥⌘P` |
 | Dock to window on / off | `⌥⌘D` |
 | Opacity up / down | `⌥⌘↑` / `⌥⌘↓` |
-| New tab | `⌘T` |
+| New tab on this site | `⌘T` |
+| New tab, any page | `⇧⌘T` |
 | Close tab | `⌘W` |
 | Jump to tab | `⌘1`…`⌘9` |
 | Tab switcher (hold, preview) | `⌃⇥` / `⌃⇧⇥` |
@@ -103,6 +105,20 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   immediately, drag elsewhere only on a hard flick. Even with DOM hit-testing
   behind it, it occasionally grabbed the window mid-selection, and a modifier
   that always means one thing beats a heuristic that is usually right.
+- **⌘T means "new chat", not "type a URL".** Floaty is mostly used for chat
+  apps, and there a new tab should be a fresh conversation, not a card asking
+  where to go. So ⌘T opens a new tab on the site you're on, at its fresh-start
+  page: the root for nearly everything, with a short table for the few that
+  start a chat elsewhere (Claude's `/new`, Gemini's `/app`). It's placed next
+  to the current tab, where you'd look for it.
+
+  It isn't gated to chat apps. The same rule everywhere — a docs site opens its
+  home, Google a fresh search — is a shortcut you never have to think about,
+  where "sometimes a tab, sometimes a card" is one you'd stop trusting. Going
+  somewhere else is `⇧⌘T` or the + button, and the card's history suggestions
+  make that quick. For a site where cloning the page you're on is the better
+  default, "New Tab Opens ▸ This Page" in the Tabs menu remembers that for the
+  site.
 - **Right-click a tab** for Reload, Duplicate, Copy Link, Open in Browser,
   Close, and Close Other Tabs. The menu shows the shortcut where one exists, so
   it doubles as the place to learn them. Right-clicking doesn't select the tab;

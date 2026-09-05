@@ -35,6 +35,7 @@ enum ShortcutAction: String, CaseIterable {
     case swapFocus
     case hide
     case newTab
+    case newTabAnywhere
     case closeTab
     case openPage
     case copyLink
@@ -58,6 +59,7 @@ enum ShortcutAction: String, CaseIterable {
         case .swapFocus: return "Swap Focus"
         case .hide: return "Hide"
         case .newTab: return "New Tab"
+        case .newTabAnywhere: return "Open in New Tab…"
         case .closeTab: return "Close Tab"
         case .openPage: return "Open in This Tab"
         case .copyLink: return "Copy Page Link"
@@ -96,6 +98,7 @@ enum ShortcutAction: String, CaseIterable {
         case .swapFocus:     return Shortcut(keyCode: UInt32(kVK_Tab), modifiers: option)
         case .hide:          return Shortcut(keyCode: UInt32(kVK_ANSI_H), modifiers: cmd)
         case .newTab:        return Shortcut(keyCode: UInt32(kVK_ANSI_T), modifiers: cmd)
+        case .newTabAnywhere: return Shortcut(keyCode: UInt32(kVK_ANSI_T), modifiers: cmd | shift)
         case .closeTab:      return Shortcut(keyCode: UInt32(kVK_ANSI_W), modifiers: cmd)
         case .openPage:      return Shortcut(keyCode: UInt32(kVK_ANSI_L), modifiers: cmd)
         case .copyLink:      return Shortcut(keyCode: UInt32(kVK_ANSI_C), modifiers: cmd | shift)

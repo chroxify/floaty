@@ -63,7 +63,7 @@ final class TabBarView: NSView {
         newTabButton.target = self
         newTabButton.action = #selector(newTab)
         newTabButton.contentTintColor = Theme.Color.fg2
-        newTabButton.toolTip = "New tab (⌘T)"
+        newTabButton.toolTip = "Open in new tab (⇧⌘T)"
         addSubview(newTabButton)
 
         NSLayoutConstraint.activate([
