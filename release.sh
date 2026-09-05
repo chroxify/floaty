@@ -34,6 +34,16 @@ if git rev-parse "$VERSION" >/dev/null 2>&1; then
   exit 1
 fi
 
+# Tagging comes before pushing, so a push that would be rejected has to be
+# caught here — otherwise the tag exists locally for a release that never went
+# out. Diverged means the same work was committed separately on both sides.
+git fetch -q origin main
+if ! git merge-base --is-ancestor origin/main HEAD; then
+  echo "main has diverged from origin/main — merge or rebase first:" >&2
+  git log --oneline HEAD..origin/main >&2
+  exit 1
+fi
+
 REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 
 echo "→ Tagging ${VERSION}…"
