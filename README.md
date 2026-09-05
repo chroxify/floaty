@@ -146,6 +146,14 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   Floaty reads them on load and watches the head for changes, so an app that
   updates them as state changes gets a live dot. Kanna sets them next to its
   title. Pages that don't have them show nothing, which is the same as before.
+- **Tabs group by site and context.** Every Kanna chat in one project, every
+  page of one GitHub repo, is a group: a hairline in the strip where the group
+  changes, headers ("Kanna › Floaty") in the Tabs menu. Groups are read off the
+  current order — tabs never move on their own, because a strip that reorders
+  itself as titles load is one you can't build muscle memory for. New tabs open
+  next to the one you're on, which keeps them with their kind most of the time;
+  "Group Tabs" in the menu sorts the rest, by site then context, each group in
+  the order its first tab already had.
 - **Right-click a tab** for Reload, Duplicate, Copy Link, Open in Browser,
   Close, and Close Other Tabs. The menu shows the shortcut where one exists, so
   it doubles as the place to learn them. Right-clicking doesn't select the tab;

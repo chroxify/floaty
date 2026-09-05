@@ -34,11 +34,18 @@ extension AppDelegate {
         if browser.tabs.isEmpty {
             tabsMenu.addItem(.caption("No tabs open"))
         } else {
+            // Under group headers ("Kanna › Floaty") when there's more than one
+            // group, in strip order — the header appears wherever the group
+            // changes, so it matches the dividers in the strip.
+            let grouped = Set(browser.tabs.map(\.groupKey)).count > 1
+            var lastKey: String?
             for (i, tab) in browser.tabs.enumerated() {
-                // Room for the middle of the title here — "Fix the dock › Floaty"
-                // tells two Kanna chats apart where the strip can't.
-                let label = tab.displayContext.map { "\(tab.displayTitle) › \($0)" } ?? tab.displayTitle
-                let entry = item(label,
+                if grouped, tab.groupKey != lastKey {
+                    if lastKey != nil { tabsMenu.addItem(.separator()) }
+                    tabsMenu.addItem(.caption(tab.groupLabel))
+                    lastKey = tab.groupKey
+                }
+                let entry = item(tab.displayTitle,
                                  #selector(selectTabFromMenu(_:)),
                                  key: i < 9 ? "\(i + 1)" : nil)
                 entry.tag = i
@@ -57,6 +64,9 @@ extension AppDelegate {
         let closeTab = item("Close Tab", #selector(closeTabFromMenu), key: "w")
         closeTab.isEnabled = browser.tabs.count > 1
         tabsMenu.addItem(closeTab)
+        let group = item("Group Tabs", #selector(groupTabsFromMenu))
+        group.isEnabled = Set(browser.tabs.map(\.groupKey)).count > 1
+        tabsMenu.addItem(group)
 
         // Per site: ⌘T lands on the site's fresh-start page by default, which is
         // a new chat on a chat app. For a site where you'd rather clone the page

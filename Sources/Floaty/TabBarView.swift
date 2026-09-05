@@ -103,7 +103,11 @@ final class TabBarView: NSView {
                 status: tab.status,
                 isActive: index == activeIndex,
                 // A lone tab has no close affordance — closing it would leave nothing.
-                canClose: tabs.count > 1
+                canClose: tabs.count > 1,
+                // A hairline where the group changes — between two Kanna projects,
+                // between Kanna and GitHub. Read off the current order, so nothing
+                // ever moves to make a group; "Group Tabs" in the menu does that.
+                startsGroup: index > 0 && tabs[index - 1].groupKey != tab.groupKey
             )
             item.onSelect = { [weak self] in self?.onSelect?(index) }
             item.onClose = { [weak self] in self?.onClose?(index) }
@@ -176,14 +180,33 @@ final class TabItemView: NSView {
     private var didDrag = false
     private var downLocation: NSPoint?
 
-    init(title: String, favicon: NSImage?, status: PageStatus, isActive: Bool, canClose: Bool) {
+    init(title: String, favicon: NSImage?, status: PageStatus, isActive: Bool, canClose: Bool,
+         startsGroup: Bool = false) {
         self.isActive = isActive
         self.canClose = canClose
         super.init(frame: .zero)
         build(title: title, favicon: favicon, status: status)
+        if startsGroup { addGroupDivider() }
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// A 1pt hairline standing in the gap before this tab, 12pt tall so it reads
+    /// as a divider rather than a border.
+    private func addGroupDivider() {
+        let line = NSView()
+        line.translatesAutoresizingMaskIntoConstraints = false
+        line.wantsLayer = true
+        line.layer?.backgroundColor = Theme.Color.bg3.cgColor
+        addSubview(line)
+        NSLayoutConstraint.activate([
+            // Centred in the 4pt stack gap: 2pt outside our leading edge.
+            line.centerXAnchor.constraint(equalTo: leadingAnchor, constant: -2),
+            line.centerYAnchor.constraint(equalTo: centerYAnchor),
+            line.widthAnchor.constraint(equalToConstant: 1),
+            line.heightAnchor.constraint(equalToConstant: 12),
+        ])
+    }
 
     private func build(title: String, favicon: NSImage?, status: PageStatus) {
         wantsLayer = true

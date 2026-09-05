@@ -151,6 +151,33 @@ final class BrowserViewController: NSViewController {
         refresh()
     }
 
+    /// Puts tabs of a kind together: by site, then by context within it, each
+    /// group in the order its first tab already had. Explicit, from the menu —
+    /// tabs never move on their own, because a strip that reorders itself as
+    /// titles load is one you can't build muscle memory for.
+    func groupTabs() {
+        guard tabs.count > 1, let active = activeTab else { return }
+        var order: [String] = []
+        var buckets: [String: [Tab]] = [:]
+        for tab in tabs {
+            let key = tab.groupKey
+            if buckets[key] == nil { order.append(key) }
+            buckets[key, default: []].append(tab)
+        }
+        // Sites first, then contexts inside them, both by first appearance.
+        var sites: [String] = []
+        for key in order {
+            let site = String(key.prefix { $0 != "|" })
+            if !sites.contains(site) { sites.append(site) }
+        }
+        tabs = sites.flatMap { site in
+            order.filter { $0.hasPrefix(site + "|") }.flatMap { buckets[$0] ?? [] }
+        }
+        activeIndex = tabs.firstIndex { $0 === active } ?? 0
+        persist()
+        refresh()
+    }
+
     func closeOtherTabs(keeping index: Int) {
         guard tabs.indices.contains(index) else { return }
         let keep = tabs[index]
@@ -348,7 +375,8 @@ final class BrowserViewController: NSViewController {
         overlay.onSubmit = { [weak self] text in
             guard let self else { return }
             switch mode {
-            case .firstRun, .newTab: self.newTab(url: text)
+            // Next to the tab you were on, like ⌘T, not at the far end.
+            case .firstRun, .newTab: self.newTab(url: text, at: self.tabs.isEmpty ? nil : self.activeIndex + 1)
             case .editURL: self.load(text)
             }
             self.dismissSetup()

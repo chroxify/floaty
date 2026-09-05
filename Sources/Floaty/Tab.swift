@@ -162,7 +162,9 @@ private final class StatusRelay: NSObject, WKScriptMessageHandler {
 final class Tab: NSObject {
 
     let id = UUID()
-    private(set) var webView = Tab.makeWebView()
+    /// Lazy so it can take the relay: handlers have to be in the configuration
+    /// *before* the web view is made, which copies it.
+    private(set) lazy var webView = Tab.makeWebView(statusHandler: statusRelay)
     private(set) var favicon: NSImage?
     /// What the page reports it's doing. Idle for pages that don't say.
     private(set) var status: PageStatus = .idle
@@ -188,6 +190,25 @@ final class Tab: NSObject {
     /// The middle of a nested title — the project a chat belongs to, the repo a
     /// release is in — for places with room for a second line.
     var displayContext: String? { cleanedTitle.context }
+
+    /// What the site calls itself: the name learned from its root page, else the
+    /// host. "Kanna" for localhost:3210, "github.com" for GitHub.
+    var siteName: String {
+        if let brand = Prefs.siteBrand(forSite: siteKey) { return brand }
+        return webView.url?.host?.replacingOccurrences(of: "www.", with: "") ?? "New Tab"
+    }
+
+    /// Tabs with the same key belong together: same site, and the same context
+    /// within it when the title gives one — every chat in one Kanna project,
+    /// every page of one GitHub repo.
+    var groupKey: String {
+        (siteKey ?? "") + "|" + (displayContext ?? "")
+    }
+
+    /// The group, named: "Kanna › Floaty", or just "Kanna".
+    var groupLabel: String {
+        displayContext.map { "\(siteName) › \($0)" } ?? siteName
+    }
 
     private var cleanedTitle: TabTitle.Cleaned {
         if let title = webView.title, !title.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -221,9 +242,8 @@ final class Tab: NSObject {
     init(url: String?) {
         zoom = 1.0
         super.init()
-        webView.navigationDelegate = self
         statusRelay.tab = self
-        webView.configuration.userContentController.add(statusRelay, name: "floatyStatus")
+        webView.navigationDelegate = self
         observe()
         if let url { load(url) }
     }
@@ -537,13 +557,14 @@ final class Tab: NSObject {
 
     // MARK: - Web view
 
-    private static func makeWebView() -> PageWebView {
+    private static func makeWebView(statusHandler: WKScriptMessageHandler) -> PageWebView {
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.userContentController.addUserScript(pageChromeScript)
         config.userContentController.addUserScript(statusScript)
+        config.userContentController.add(statusHandler, name: "floatyStatus")
 
         let webView = PageWebView(frame: .zero, configuration: config)
         webView.translatesAutoresizingMaskIntoConstraints = false

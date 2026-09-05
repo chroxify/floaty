@@ -276,6 +276,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         browser.newTabOnCurrentSite()
     }
 
+    @objc func groupTabsFromMenu() {
+        browser.groupTabs()
+    }
+
     @objc func newTabAnywhere() {
         showPanel()
         browser.toggleSetup(mode: .newTab)
