@@ -134,18 +134,23 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
 - **A tab shows what its page is doing**, if the page says. An agent chat that's
   working, one that stopped to ask you something, one that finished while you
   were in another tab. The state **takes the favicon's slot** rather than
-  sitting on its corner: a spinner while working, a solid dot for the rest —
-  blue waiting for you, green done, red failed. A state matters more than a
-  logo, so it gets the whole 14pt, and the favicon comes back when there's
-  nothing to say. Blue and green match Kanna's own sidebar, so the dot means
-  the same thing in both places. The same treatment in the switcher; the Tabs
-  menu gets a coloured dot beside the title.
+  sitting on its corner — a state matters more than a logo, so it gets the
+  whole 14pt, and the favicon comes back when there's nothing to say. The same
+  treatment in the switcher; the Tabs menu gets a coloured dot beside the title.
 
-  The spinner is the one animation in the strip. A corner dot was tried first,
-  with a pulse for "working" at two strengths, and later still: an 8pt dot
-  over a favicon is hard to read at all, and a pulse pulls the eye to a tab
-  you weren't in. A spinner isn't asking for attention — it's showing work,
-  and it's the motion Kanna itself draws for a running chat.
+  The indicators are **Kanna's own, reproduced exactly**, so a chat looks the
+  same in the strip as in Kanna's sidebar: lucide's loader-circle in Kanna's
+  logo colour for a running chat, one turn a second; a 10px blue-400 dot with
+  Kanna's ping ring behind it when it's waiting for you; the same in
+  emerald-400 when it finished while you were elsewhere. Failed gets a red dot
+  of Floaty's own, since the sidebar shows nothing for it. The colours are
+  fixed values rather than system ones on purpose: they're Kanna's, and they're
+  the same in both appearances there too.
+
+  Getting here took a few tries: a corner dot over the favicon was hard to
+  read at 8pt, grey for "working" read as asleep, and a pulse on the dot
+  itself pulled the eye. Copying the thing you already know how to read beat
+  designing a new one.
 
   The page opts in with two meta tags, nothing Floaty-specific in the values:
 

@@ -341,14 +341,18 @@ final class TabItemView: NSView {
 }
 
 /// The 14pt slot at the front of a tab. Shows the favicon — until the page has
-/// something to say, when the status takes the slot over entirely: a spinner
-/// while it's working, a solid dot for waiting / done / failed. The favicon is
-/// what a tab looks like at rest; a state is more important than a logo, so it
-/// gets the whole slot rather than a corner of it.
+/// something to say, when the status takes the slot over entirely. The favicon
+/// is what a tab looks like at rest; a state is more important than a logo, so
+/// it gets the whole slot rather than a corner of it.
 ///
-/// The spinner is the one animation in the strip. It's the same motion Kanna
-/// draws in its own sidebar for a running chat, and unlike a pulse it isn't
-/// asking for attention — it's showing work.
+/// The indicators are Kanna's own, reproduced exactly, so a chat looks the same
+/// in Floaty's strip as in Kanna's sidebar (`renderChatStatusDot`):
+/// - working: lucide's loader-circle — a 315° arc, 2/24 stroke, round caps —
+///   in Kanna's logo colour, one turn per second, linear.
+/// - waiting / done: a 10px dot, blue-400 / emerald-400, with a ping ring
+///   behind it scaling to 2× and fading out over a second.
+/// - failed: Kanna's sidebar shows nothing; here a red dot, no ping — a failed
+///   turn is worth a mark.
 final class TabIconView: NSView {
 
     static let size: CGFloat = 14
@@ -358,11 +362,13 @@ final class TabIconView: NSView {
 
     private let imageView = NSImageView()
     private let dot = CALayer()
+    private let ping = CALayer()
     private let arc = CAShapeLayer()
 
-    private static let dotSize: CGFloat = 9
-    private static let arcSize: CGFloat = 12
-    private static let arcWidth: CGFloat = 1.75
+    private static let dotSize: CGFloat = 10                 // size-2.5
+    private static let arcSize: CGFloat = 14                 // size-3.5
+    private static let arcWidth: CGFloat = 14 * 2 / 24        // lucide stroke 2 on a 24 box
+    private static let arcSweep: CGFloat = 0.875             // loader-circle: 315°
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -378,18 +384,19 @@ final class TabIconView: NSView {
             imageView.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
 
-        dot.cornerRadius = Self.dotSize / 2
-        dot.bounds = CGRect(x: 0, y: 0, width: Self.dotSize, height: Self.dotSize)
-        layer?.addSublayer(dot)
+        for l in [ping, dot] {
+            l.cornerRadius = Self.dotSize / 2
+            l.bounds = CGRect(x: 0, y: 0, width: Self.dotSize, height: Self.dotSize)
+            layer?.addSublayer(l)   // ping first, so it sits behind the dot
+        }
 
-        // Three quarters of a ring, round-capped, spun about its centre.
         arc.bounds = CGRect(x: 0, y: 0, width: Self.arcSize, height: Self.arcSize)
         arc.path = CGPath(ellipseIn: arc.bounds.insetBy(dx: Self.arcWidth / 2, dy: Self.arcWidth / 2), transform: nil)
         arc.fillColor = nil
         arc.lineWidth = Self.arcWidth
         arc.lineCap = .round
         arc.strokeStart = 0
-        arc.strokeEnd = 0.72
+        arc.strokeEnd = Self.arcSweep
         layer?.addSublayer(arc)
 
         apply()
@@ -403,6 +410,7 @@ final class TabIconView: NSView {
         CATransaction.setDisableActions(true)
         let centre = CGPoint(x: bounds.midX, y: bounds.midY)
         dot.position = centre
+        ping.position = centre
         arc.position = centre
         CATransaction.commit()
     }
@@ -418,6 +426,8 @@ final class TabIconView: NSView {
         guard let color = status.color else {
             imageView.isHidden = false
             dot.isHidden = true
+            ping.isHidden = true
+            ping.removeAllAnimations()
             arc.isHidden = true
             arc.removeAllAnimations()
             if let favicon {
@@ -432,27 +442,50 @@ final class TabIconView: NSView {
         }
 
         imageView.isHidden = true
-        effectiveAppearance.performAsCurrentDrawingAppearance {
-            dot.backgroundColor = color.cgColor
-            arc.strokeColor = color.cgColor
-        }
+        dot.backgroundColor = color.cgColor
+        ping.backgroundColor = color.withAlphaComponent(0.8).cgColor   // bg-blue-400/80
+        arc.strokeColor = color.cgColor
 
         if status == .working {
             dot.isHidden = true
+            ping.isHidden = true
+            ping.removeAllAnimations()
             arc.isHidden = false
             if arc.animation(forKey: "spin") == nil {
+                // Tailwind animate-spin: one turn per second, linear, clockwise.
                 let spin = CABasicAnimation(keyPath: "transform.rotation.z")
                 spin.fromValue = 0
                 spin.toValue = -2 * Double.pi
-                spin.duration = 0.9
+                spin.duration = 1.0
                 spin.repeatCount = .infinity
                 spin.timingFunction = CAMediaTimingFunction(name: .linear)
                 arc.add(spin, forKey: "spin")
             }
-        } else {
-            arc.isHidden = true
-            arc.removeAllAnimations()
-            dot.isHidden = false
+            return
+        }
+
+        arc.isHidden = true
+        arc.removeAllAnimations()
+        dot.isHidden = false
+
+        // Kanna's `kanna-ping`: scale 1 → 2 and opacity → 0 by 75%, held to
+        // 100%, one second, forever. Waiting and done only, as in the sidebar.
+        let pings = status == .waiting || status == .done
+        ping.isHidden = !pings
+        if pings, ping.animation(forKey: "ping") == nil {
+            let scale = CAKeyframeAnimation(keyPath: "transform.scale")
+            scale.values = [1.0, 2.0, 2.0]
+            scale.keyTimes = [0, 0.75, 1]
+            let fade = CAKeyframeAnimation(keyPath: "opacity")
+            fade.values = [1.0, 0.0, 0.0]
+            fade.keyTimes = [0, 0.75, 1]
+            let group = CAAnimationGroup()
+            group.animations = [scale, fade]
+            group.duration = 1.0
+            group.repeatCount = .infinity
+            ping.add(group, forKey: "ping")
+        } else if !pings {
+            ping.removeAllAnimations()
         }
     }
 }
