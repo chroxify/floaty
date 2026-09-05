@@ -70,6 +70,30 @@ final class BrowserViewController: NSViewController {
         tabBar.onSelect = { [weak self] index in self?.select(index) }
         tabBar.onClose = { [weak self] index in self?.closeTab(at: index) }
         tabBar.onNewTab = { [weak self] in self?.presentSetup(mode: .newTab) }
+        tabBar.onMenuAction = { [weak self] action, index in self?.perform(action, on: index) }
+    }
+
+    // MARK: - Tab menu
+
+    private func perform(_ action: TabMenuAction, on index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        let tab = tabs[index]
+        switch action {
+        case .reload:
+            tab.reload()
+        case .duplicate:
+            // Next to the original, not at the end — that's where you'd look.
+            newTab(url: tab.urlString, at: index + 1)
+        case .copyLink:
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(tab.urlString, forType: .string)
+        case .openInBrowser:
+            if let url = tab.webView.url { NSWorkspace.shared.open(url) }
+        case .close:
+            closeTab(at: index)
+        case .closeOthers:
+            closeOtherTabs(keeping: index)
+        }
     }
 
     // MARK: - Restoring
@@ -99,11 +123,27 @@ final class BrowserViewController: NSViewController {
 
     // MARK: - Tabs
 
-    func newTab(url: String) {
+    /// Opens and switches to a new tab, at the end unless told where.
+    func newTab(url: String, at position: Int? = nil) {
         let tab = makeTab(url: url)
-        tabs.append(tab)
+        let index = min(max(position ?? tabs.count, 0), tabs.count)
+        tabs.insert(tab, at: index)
         touch(tab)
-        activeIndex = tabs.count - 1
+        activeIndex = index
+        showActiveTab()
+        persist()
+        refresh()
+    }
+
+    func closeOtherTabs(keeping index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        let keep = tabs[index]
+        for tab in tabs where tab !== keep {
+            recentlyUsed.removeAll { $0 === tab }
+            tab.webView.removeFromSuperview()
+        }
+        tabs = [keep]
+        activeIndex = 0
         showActiveTab()
         persist()
         refresh()

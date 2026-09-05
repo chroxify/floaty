@@ -103,6 +103,11 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   immediately, drag elsewhere only on a hard flick. Even with DOM hit-testing
   behind it, it occasionally grabbed the window mid-selection, and a modifier
   that always means one thing beats a heuristic that is usually right.
+- **Right-click a tab** for Reload, Duplicate, Copy Link, Open in Browser,
+  Close, and Close Other Tabs. The menu shows the shortcut where one exists, so
+  it doubles as the place to learn them. Right-clicking doesn't select the tab;
+  you asked about it, not for it. Duplicate lands next to the original, not at
+  the end.
 - **Swap focus** (`⌥⇥`) moves between Floaty and the window behind it — the
   docked window if there is one, otherwise the app you were last in — leaving both
   on screen. It's deliberately a *separate* key from show/hide rather than ⌃Space

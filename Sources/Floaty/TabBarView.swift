@@ -1,5 +1,10 @@
 import AppKit
 
+/// What a tab's right-click menu can do to it.
+enum TabMenuAction {
+    case reload, duplicate, copyLink, openInBrowser, close, closeOthers
+}
+
 /// The strip above the page. Tabs stretch to fill it, the active one wears a
 /// solid pill, and the empty space around them drags the window — which is what
 /// a title bar would have done if this window had one.
@@ -10,6 +15,13 @@ final class TabBarView: NSView {
     var onSelect: ((Int) -> Void)?
     var onClose: ((Int) -> Void)?
     var onNewTab: (() -> Void)?
+    var onMenuAction: ((TabMenuAction, Int) -> Void)?
+
+    /// Carries which action on which tab through an NSMenuItem.
+    private struct MenuChoice {
+        let action: TabMenuAction
+        let index: Int
+    }
 
     private let backdrop = NSVisualEffectView()
     private let separator = NSBox()
@@ -94,11 +106,44 @@ final class TabBarView: NSView {
             )
             item.onSelect = { [weak self] in self?.onSelect?(index) }
             item.onClose = { [weak self] in self?.onClose?(index) }
+            item.menuProvider = { [weak self] in self?.contextMenu(for: index, of: tabs.count) }
             stack.addArrangedSubview(item)
         }
     }
 
     @objc private func newTab() { onNewTab?() }
+
+    // MARK: - Context menu
+
+    /// The things you'd otherwise reach for a shortcut or the menubar to do to a
+    /// tab, on the tab. Shortcuts are shown where one exists so the menu also
+    /// teaches them.
+    private func contextMenu(for index: Int, of count: Int) -> NSMenu {
+        let menu = NSMenu()
+        func add(_ title: String, _ action: TabMenuAction, key: String = "", mods: NSEvent.ModifierFlags = .command, enabled: Bool = true) {
+            let item = NSMenuItem(title: title, action: #selector(menuAction(_:)), keyEquivalent: key)
+            item.keyEquivalentModifierMask = key.isEmpty ? [] : mods
+            item.target = self
+            item.representedObject = MenuChoice(action: action, index: index)
+            item.isEnabled = enabled
+            menu.addItem(item)
+        }
+        menu.autoenablesItems = false
+        add("Reload", .reload, key: "r")
+        add("Duplicate Tab", .duplicate)
+        menu.addItem(.separator())
+        add("Copy Link", .copyLink, key: "c", mods: [.command, .shift])
+        add("Open in Browser", .openInBrowser)
+        menu.addItem(.separator())
+        add("Close Tab", .close, key: "w")
+        add("Close Other Tabs", .closeOthers, enabled: count > 1)
+        return menu
+    }
+
+    @objc private func menuAction(_ item: NSMenuItem) {
+        guard let choice = item.representedObject as? MenuChoice else { return }
+        onMenuAction?(choice.action, choice.index)
+    }
 
     // MARK: - Dragging
 
@@ -117,6 +162,8 @@ final class TabItemView: NSView {
 
     var onSelect: (() -> Void)?
     var onClose: (() -> Void)?
+    /// Built on demand, so it reflects the tab set at the moment of the click.
+    var menuProvider: (() -> NSMenu?)?
 
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
@@ -268,6 +315,9 @@ final class TabItemView: NSView {
         }
         onSelect?()
     }
+
+    /// Right-click. Doesn't select the tab — you asked about it, not for it.
+    override func menu(for event: NSEvent) -> NSMenu? { menuProvider?() }
 
     @objc private func close() { onClose?() }
 }
