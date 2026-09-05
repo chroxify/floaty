@@ -416,10 +416,12 @@ final class StatusDot: NSView {
         dot.removeAllAnimations()
         dot.opacity = 1
         if status == .working {
+            // Barely: enough to read as alive from the corner of the eye, not
+            // enough to draw the eye to it.
             let pulse = CABasicAnimation(keyPath: "transform.scale")
             pulse.fromValue = 1.0
-            pulse.toValue = 0.7
-            pulse.duration = 0.9
+            pulse.toValue = 0.85
+            pulse.duration = 1.2
             pulse.autoreverses = true
             pulse.repeatCount = .infinity
             pulse.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
