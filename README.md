@@ -269,10 +269,12 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   the room is.
 
   **Drag it up or down to set its height** along the parent, and that offset
-  sticks. It defaults to the same 8pt used horizontally, so a docked window is
-  inset evenly rather than flush against the parent's top edge. The offset is
-  measured from the parent's *top* edge, so the pairing holds when the parent is
-  resized from the bottom. Drop it on the other side and
+  sticks as a relative alignment: top, center, bottom, or anywhere between.
+  Center it beside a tall window and it stays centered beside a shorter one,
+  including when either window resizes. Top and bottom leave an 8pt inset.
+  When the parent is too short for those insets, Floaty centers vertically and
+  remembers your alignment for taller windows. Existing point offsets migrate
+  once against the first available parent. Drop it on the other side and
   it re-docks there (in Auto; a manual Left/Right stays put). "Align to Top"
   resets the offset.
 

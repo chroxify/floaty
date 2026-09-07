@@ -8,6 +8,7 @@ let package = Package(
         .executableTarget(
             name: "Floaty",
             path: "Sources/Floaty"
-        )
+        ),
+        .testTarget(name: "FloatyTests", dependencies: ["Floaty"])
     ]
 )

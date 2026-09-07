@@ -20,6 +20,7 @@ enum Prefs {
         static let dockMode = "dockMode"
         static let dockSide = "dockSide"
         static let dockVerticalOffset = "dockVerticalOffset"
+        static let dockVerticalAlignment = "dockVerticalAlignment"
         static let preferredDockMode = "preferredDockMode"
         static let dockOnlyWhileFocused = "dockOnlyWhileFocused"
         static let keepParentFocus = "keepParentFocus"
@@ -229,10 +230,24 @@ enum Prefs {
     /// The inset a docked window keeps from its parent, used on both axes.
     static let dockGap: CGFloat = 8
 
-    /// Points from the parent window's top edge down to ours — measured from the
-    /// top so the pairing holds when the parent resizes from the bottom. Defaults
-    /// to the same gap used horizontally, so the window is inset evenly rather
-    /// than flush against the parent's top edge.
+    /// Relative travel from top (0) through center (0.5) to bottom (1).
+    /// Nil until the old point offset can be migrated against a parent window.
+    static var dockVerticalAlignment: CGFloat? {
+        get {
+            guard let value = d.object(forKey: Key.dockVerticalAlignment) as? Double,
+                  value.isFinite else { return nil }
+            return CGFloat(min(max(value, 0), 1))
+        }
+        set {
+            guard let newValue, newValue.isFinite else {
+                d.removeObject(forKey: Key.dockVerticalAlignment)
+                return
+            }
+            d.set(Double(min(max(newValue, 0), 1)), forKey: Key.dockVerticalAlignment)
+        }
+    }
+
+    /// Legacy point offset, read once when migrating to relative alignment.
     static var dockVerticalOffset: CGFloat {
         get { CGFloat(d.object(forKey: Key.dockVerticalOffset) as? Double ?? Double(dockGap)) }
         set { d.set(Double(newValue), forKey: Key.dockVerticalOffset) }

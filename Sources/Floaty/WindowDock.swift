@@ -73,7 +73,9 @@ final class WindowDock {
 
     /// The app we follow in `.activeWindow` mode. Held separately because
     /// clicking Floaty makes Floaty frontmost, which must not retarget us.
-    private var lastActivePID: pid_t?
+    private var lastActiveApplication: NSRunningApplication?
+    /// Valid window owners recovered for apps whose workspace PID is unavailable.
+    private var resolvedPIDs: [String: pid_t] = [:]
     /// The last whitelisted app we followed, so leaving it briefly doesn't lose
     /// the target.
     private var lastWhitelistedPID: pid_t?
@@ -95,7 +97,7 @@ final class WindowDock {
 
     /// Held in memory while you drag and written once on release. Recording
     /// straight to Prefs would be a UserDefaults write per frame.
-    private var verticalOffset: CGFloat = Prefs.dockVerticalOffset
+    private var verticalAlignment: CGFloat? = Prefs.dockVerticalAlignment
     private var draggingPanel = false
 
     /// The frame we last set, read back after setting so rounding can't make it
@@ -128,11 +130,12 @@ final class WindowDock {
         guard isDocked else { return }
         // Seed the target so `.activeWindow` has something to follow before you
         // switch apps — otherwise docking looks broken until you alt-tab once.
-        if lastActivePID == nil {
+        if lastActiveApplication == nil {
             let ours = ProcessInfo.processInfo.processIdentifier
-            lastActivePID = NSWorkspace.shared.runningApplications.first {
-                $0.isActive && $0.processIdentifier != ours
-            }?.processIdentifier
+            if let front = NSWorkspace.shared.frontmostApplication,
+               front.processIdentifier != ours {
+                lastActiveApplication = front
+            }
         }
         schedule(interval: activeInterval)
         tick()
@@ -159,7 +162,7 @@ final class WindowDock {
     /// swap works either way.
     var focusReturnTarget: NSRunningApplication? {
         if let target = targetApplication { return target }
-        guard let pid = lastActivePID else { return nil }
+        guard let app = lastActiveApplication, let pid = resolvedPID(for: app) else { return nil }
         return NSRunningApplication(processIdentifier: pid)
     }
 
@@ -174,7 +177,7 @@ final class WindowDock {
     }
 
     func refresh() {
-        verticalOffset = Prefs.dockVerticalOffset
+        verticalAlignment = Prefs.dockVerticalAlignment
         if isDocked { start() } else { stop() }
         onStateChange?()
     }
@@ -197,7 +200,7 @@ final class WindowDock {
                   let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   app.processIdentifier != ProcessInfo.processInfo.processIdentifier
             else { return }
-            self.lastActivePID = app.processIdentifier
+            self.lastActiveApplication = app
             // A new target means the old cached frame is meaningless.
             self.lastParentFrame = nil
             self.stillTicks = 0
@@ -282,7 +285,7 @@ final class WindowDock {
         }
         if draggingPanel && !buttonDown {
             draggingPanel = false
-            Prefs.dockVerticalOffset = verticalOffset
+            Prefs.dockVerticalAlignment = verticalAlignment
         }
 
         if parent == lastParentFrame {
@@ -379,23 +382,52 @@ final class WindowDock {
         case .off:
             return nil
         case .activeWindow:
-            return lastActivePID
+            return lastActiveApplication.flatMap { resolvedPID(for: $0) }
         case .apps(let ids):
             // Prefer the whitelisted app you're actually in.
             if let front = NSWorkspace.shared.frontmostApplication,
                let id = front.bundleIdentifier, ids.contains(id) {
-                lastWhitelistedPID = front.processIdentifier
-                return front.processIdentifier
+                let pid = resolvedPID(for: front)
+                lastWhitelistedPID = pid
+                return pid
             }
             // Otherwise stay with the one we were following, if it's still alive.
             if let last = lastWhitelistedPID,
-               NSRunningApplication(processIdentifier: last) != nil {
+               let app = NSRunningApplication(processIdentifier: last),
+               !app.isTerminated, let id = app.bundleIdentifier, ids.contains(id) {
                 return last
             }
             return ids
                 .compactMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first }
-                .first?.processIdentifier
+                .compactMap { resolvedPID(for: $0) }
+                .first
         }
+    }
+
+    /// Some apps (including Device Hub) have a workspace entry with PID -1.
+    /// Window Server still knows their actual owner. Match that owner by bundle
+    /// identity, never by display name, and keep it for subsequent polling ticks.
+    private func resolvedPID(for app: NSRunningApplication) -> pid_t? {
+        guard !app.isTerminated else { return nil }
+        if app.processIdentifier > 0 { return app.processIdentifier }
+        guard let id = app.bundleIdentifier else { return nil }
+        // Keep the numeric PID: workspace enumeration can mutate even an
+        // NSRunningApplication created from a valid PID back to PID -1.
+        if let pid = resolvedPIDs[id],
+           let owner = NSRunningApplication(processIdentifier: pid),
+           !owner.isTerminated, owner.bundleIdentifier == id {
+            return pid
+        }
+        resolvedPIDs[id] = nil
+        var seen = Set<pid_t>()
+        for window in normalWindows() where seen.insert(window.pid).inserted {
+            guard window.pid > 0,
+                  let owner = NSRunningApplication(processIdentifier: window.pid),
+                  !owner.isTerminated, owner.bundleIdentifier == id else { continue }
+            resolvedPIDs[id] = window.pid
+            return window.pid
+        }
+        return nil
     }
 
     /// Where we should sit, given the parent.
@@ -413,9 +445,19 @@ final class WindowDock {
         case .right, .auto: x = parent.maxX + gap
         }
 
-        // The offset is measured from the parent's top edge down to ours, so the
-        // pairing holds when the parent resizes from the bottom.
-        let y = parent.maxY - verticalOffset - size.height
+        // Remember alignment within the available height, so centering against
+        // a tall window also centers against a short one.
+        if verticalAlignment == nil {
+            let legacyOffset = Prefs.dockVerticalOffset
+            verticalAlignment = DockVerticalPlacement.alignment(
+                offset: legacyOffset, parentHeight: parent.height,
+                panelHeight: size.height, gap: gap) ?? (legacyOffset == gap ? 0 : 0.5)
+            Prefs.dockVerticalAlignment = verticalAlignment
+        }
+        let offset = DockVerticalPlacement.offset(
+            alignment: verticalAlignment ?? 0.5, parentHeight: parent.height,
+            panelHeight: size.height, gap: gap)
+        let y = parent.maxY - offset - size.height
 
         var frame = CGRect(x: x, y: y, width: size.width, height: size.height)
 
@@ -453,13 +495,19 @@ final class WindowDock {
 
     // MARK: - User repositioning
 
-    /// Drag it and it keeps what you chose: the vertical offset it ends up at,
+    /// Drag it and it keeps what you chose: the relative vertical alignment,
     /// and which side of the parent you dropped it on.
     private func recordUserPosition(against parent: CGRect) {
         guard !isRepositioning else { return }
         let frame = panel.frame
 
-        verticalOffset = parent.maxY - frame.maxY
+        // A parent no taller than Floaty has no travel to measure. Keep the
+        // existing preference so switching back to a taller window restores it.
+        if let alignment = DockVerticalPlacement.alignment(
+            offset: parent.maxY - frame.maxY, parentHeight: parent.height,
+            panelHeight: frame.height, gap: gap) {
+            verticalAlignment = alignment
+        }
 
         // Only a manual side setting is sticky; in auto we let the drag pick.
         if Prefs.dockSide == .auto {
@@ -469,8 +517,8 @@ final class WindowDock {
 
     /// Puts it back to the top of the parent.
     func resetPosition() {
-        verticalOffset = Prefs.dockGap
-        Prefs.dockVerticalOffset = Prefs.dockGap
+        verticalAlignment = 0
+        Prefs.dockVerticalAlignment = 0
         stillTicks = 0
         lastParentFrame = nil
         tick()
