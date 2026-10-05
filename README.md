@@ -119,6 +119,10 @@ The field takes searches too — anything that isn't host-shaped goes to Google.
   make that quick. For a site where cloning the page you're on is the better
   default, "New Tab Opens ▸ This Page" in the Tabs menu remembers that for the
   site.
+- **One tab, no strip.** With a single page open the strip would be a row of
+  one thing you can't switch away from, so it collapses and the page gets the
+  whole window. It comes back with the second tab. Until then the window moves
+  by double-click-drag or `⌘`-drag, and `⌘T` / `⇧⌘T` still open tabs.
 - **Titles are cleaned.** Page titles are written for a browser, where the tab
   bar is the only place the site's name appears: `[2] Kanna : Floaty : Fix the
   dock`, `Release 1.0.3 · chroxify/floaty · GitHub`. Next to a favicon the site

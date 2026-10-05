@@ -11,7 +11,8 @@ final class BrowserViewController: NSViewController {
     private let tabBar = TabBarView()
     private let content = NSView()
     private var setup: SetupView?
-    /// Collapses to zero while there are no tabs, so first run is just the card.
+    /// Collapses to zero with fewer than two tabs: first run is just the card,
+    /// a single page is just the page.
     private var tabBarHeight: NSLayoutConstraint!
 
     /// Fires when the tab set or the active tab changes, so the menu can follow.
@@ -277,8 +278,13 @@ final class BrowserViewController: NSViewController {
     }
 
     private func refresh() {
-        tabBar.isHidden = tabs.isEmpty
-        tabBarHeight.constant = tabs.isEmpty ? 0 : TabBarView.height
+        // One tab needs no strip: there's nothing to switch to, and the page
+        // gets the whole window. The window still moves by double-click-drag
+        // or ⌘-drag, and ⌘T / ⇧⌘T still open tabs — the strip returns with
+        // the second one.
+        let showStrip = tabs.count > 1
+        tabBar.isHidden = !showStrip
+        tabBarHeight.constant = showStrip ? TabBarView.height : 0
         tabBar.reload(tabs: tabs, activeIndex: activeIndex)
         onTabsChanged?()
     }
